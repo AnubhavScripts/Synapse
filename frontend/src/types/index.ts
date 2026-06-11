@@ -131,6 +131,10 @@ export interface Opportunity {
   status: string;
   ai_reasoning: string;
   created_at: string;
+  // v2 fields
+  priority_score: number;          // 0–100
+  key_drivers: string[];           // ["Avg purchase cycle: 18 days", ...]
+  metadata_json: Record<string, unknown>;  // why_now, projected_ltv, etc.
 }
 
 export interface AnalyticsOverview {
@@ -194,4 +198,55 @@ export interface StrategyResponse {
     estimated_revenue: number;
   };
   decision_reasoning: string[];
+}
+
+// ── v2 — Opportunity Investigation types ─────────────────────────────────
+
+/**
+ * One of the 3 type-specific candidate actions compared during an investigation.
+ */
+export interface CandidateAction {
+  name: string;
+  description: string;
+  expected_revenue: number;
+  expected_conversions: number;
+  conversion_rate: number;      // e.g. 0.118
+  margin_impact: string;        // "Low" | "Medium" | "High"
+  pros: string[];
+  cons: string[];
+}
+
+/**
+ * Full investigation report returned by POST /api/strategist/investigate.
+ *
+ * Flow:
+ *   Opportunity → Root Cause + Why Now? → Evidence + Confidence
+ *       → 3 Candidate Actions → Recommended Action (Impact / Effort / Label)
+ *
+ * Note: impact, effort, and recommended_action apply to the WINNING option only
+ * (index = recommended_index). They are NOT repeated on each CandidateAction.
+ */
+export interface OpportunityInvestigationResponse {
+  opportunity_id: string;
+  opportunity_title: string;
+
+  // Diagnostic layer
+  root_cause: string;
+  why_now: string;
+
+  // Evidence layer
+  confidence_score: number;    // 0–100, e.g. 89
+  evidence: string[];          // ["Similar campaigns achieved 11.8% conversion", ...]
+
+  // Actions layer (always 3, type-specific)
+  options: CandidateAction[];
+
+  // Recommendation layer (winning option only)
+  recommended_index: number;
+  selection_reasoning: string;
+  impact: string;              // "High" | "Medium" | "Low"
+  effort: string;              // "High" | "Medium" | "Low"
+  recommended_action: string;  // "Launch immediately" | "Review manually" | "Schedule for off-peak"
+
+  recommended_goal: string;    // Pre-fills the /analyze goal input
 }

@@ -1,309 +1,565 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, Send, Target, Users, Lightbulb, MessageSquare, BarChart3, Rocket, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-react';
-import { analyzeGoal } from '../api/client';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  getOpportunities, refreshOpportunities,
+  investigateOpportunity, analyzeGoal, dismissOpportunity,
+} from '../api/client';
+import type { Opportunity, OpportunityInvestigationResponse, StrategyResponse } from '../types';
 import { LoadingButton } from '../components/ui/LoadingButton';
-import type { StrategyResponse } from '../types';
 
-function formatCurrency(n: number): string {
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+const OPP_TYPE_LABELS: Record<string, { icon: string; label: string; color: string }> = {
+  dormant_recovery: { icon: '⚠️', label: 'Dormancy Risk', color: '#f59e0b' },
+  churn_prevention: { icon: '🔴', label: 'Churn Signal', color: '#ef4444' },
+  cross_sell:       { icon: '🔀', label: 'Cross-Sell Gap', color: '#8b5cf6' },
+  emerging_vip:     { icon: '⭐', label: 'Emerging VIP', color: '#10b981' },
+  loyalty:          { icon: '👑', label: 'VIP Unrewarded', color: '#3b82f6' },
+  upsell:           { icon: '📈', label: 'Upsell Window', color: '#06b6d4' },
+};
+
+function priorityColor(score: number): string {
+  if (score >= 80) return '#ef4444';
+  if (score >= 60) return '#f59e0b';
+  return '#10b981';
+}
+
+function formatRevenue(n: number): string {
   if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
+  if (n >= 1000) return `₹${(n / 1000).toFixed(0)}K`;
   return `₹${n.toFixed(0)}`;
 }
 
-const channelColors: Record<string, string> = {
-  whatsapp: '#25d366', sms: '#3b82f6', email: '#8b5cf6', rcs: '#f59e0b',
-};
+function ImpactEffortBadge({ value, type }: { value: string; type: 'impact' | 'effort' }) {
+  const colors: Record<string, string> = {
+    High: type === 'impact' ? '#10b981' : '#ef4444',
+    Medium: '#f59e0b',
+    Low: type === 'impact' ? '#ef4444' : '#10b981',
+  };
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      background: `${colors[value]}18`, color: colors[value],
+      border: `1px solid ${colors[value]}40`,
+      borderRadius: '6px', padding: '2px 10px', fontSize: '12px', fontWeight: 600,
+    }}>
+      {value}
+    </span>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────
 
 export default function AIStrategist() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [goal, setGoal] = useState(searchParams.get('goal') || '');
-  const [loading, setLoading] = useState(false);
-  const [launchLoading, setLaunchLoading] = useState(false);
-  const [launched, setLaunched] = useState(false);
+
+  // ─ Opportunity feed state ─
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [loadingOpps, setLoadingOpps] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // ─ Per-card investigate state ─
+  const [investigatingId, setInvestigatingId] = useState<string | null>(null);
+  const [investigation, setInvestigation] = useState<OpportunityInvestigationResponse | null>(null);
+  const [investigatedFor, setInvestigatedFor] = useState<string | null>(null);
+
+  // ─ Dismiss state ─
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
+
+  // ─ Goal input (secondary) ─
+  const [goal, setGoal] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
   const [strategy, setStrategy] = useState<StrategyResponse | null>(null);
-  const [error, setError] = useState('');
-  const [visibleCards, setVisibleCards] = useState(0);
+  const [strategyError, setStrategyError] = useState('');
 
-  useEffect(() => { document.title = 'ReachIQ — AI Strategist'; }, []);
-
-  useEffect(() => {
-    const initial = searchParams.get('goal');
-    if (initial && !strategy) {
-      setGoal(initial);
-      handleAnalyze(initial);
+  // ── Load opportunities on mount ───────────────────────────────────────
+  const loadOpportunities = useCallback(async (forceRefresh = false) => {
+    try {
+      if (forceRefresh) {
+        setRefreshing(true);
+        const opps = await refreshOpportunities();
+        setOpportunities(opps);
+      } else {
+        setLoadingOpps(true);
+        const opps = await getOpportunities();
+        if (opps.length === 0) {
+          const fresh = await refreshOpportunities();
+          setOpportunities(fresh);
+        } else {
+          setOpportunities(opps);
+        }
+      }
+    } catch {
+      // silently handle
+    } finally {
+      setLoadingOpps(false);
+      setRefreshing(false);
     }
   }, []);
 
-  async function handleAnalyze(text?: string) {
-    const goalText = text || goal;
-    if (!goalText.trim()) return;
-    setLoading(true);
-    setError('');
-    setStrategy(null);
-    setVisibleCards(0);
+  useEffect(() => { loadOpportunities(); }, [loadOpportunities]);
 
+  // ── Investigate opportunity ───────────────────────────────────────────
+  async function handleInvestigate(opp: Opportunity) {
+    setInvestigatingId(opp.id);
+    setInvestigation(null);
+    setInvestigatedFor(opp.id);
     try {
-      const result = await analyzeGoal(goalText);
-      setStrategy(result);
-      // Stagger card reveal
-      for (let i = 1; i <= 7; i++) {
-        setTimeout(() => setVisibleCards(i), i * 400);
+      const result = await investigateOpportunity(opp.id);
+      setInvestigation(result);
+    } catch {
+      setInvestigation(null);
+    } finally {
+      setInvestigatingId(null);
+    }
+  }
+
+  // ── Dismiss opportunity ───────────────────────────────────────────────
+  async function handleDismiss(id: string) {
+    setDismissingId(id);
+    try {
+      await dismissOpportunity(id);
+      setOpportunities(prev => prev.filter(o => o.id !== id));
+      if (investigatedFor === id) {
+        setInvestigation(null);
+        setInvestigatedFor(null);
       }
-    } catch (e: unknown) {
-      setError('Failed to analyze goal. Please ensure the backend is running.');
-      console.error(e);
     } finally {
-      setLoading(false);
+      setDismissingId(null);
     }
   }
 
-  async function handleLaunchCampaign() {
-    if (!strategy) return;
-    setLaunchLoading(true);
+  // ── Analyze goal (secondary) ──────────────────────────────────────────
+  async function handleAnalyze(e: React.FormEvent) {
+    e.preventDefault();
+    if (!goal.trim()) return;
+    setAnalyzing(true);
+    setStrategyError('');
+    setStrategy(null);
     try {
-      // The strategy result contains a campaign_id when one has been pre-created,
-      // otherwise we navigate to Campaigns page where the draft will appear.
-      setLaunched(true);
-      setTimeout(() => navigate('/campaigns'), 1200);
-    } catch (e) {
-      console.error(e);
+      const result = await analyzeGoal(goal);
+      setStrategy(result);
+    } catch {
+      setStrategyError('Failed to analyze goal. Please try again.');
     } finally {
-      setLaunchLoading(false);
+      setAnalyzing(false);
     }
   }
+
+  // ── Launch campaign from investigation ────────────────────────────────
+  function handleLaunchFromInvestigation() {
+    if (!investigation) return;
+    navigate('/campaigns');
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1><Brain size={28} style={{ display: 'inline', verticalAlign: 'middle', color: 'var(--color-primary-500)', marginRight: '8px' }} />AI Strategist</h1>
-        <p>Describe your business goal and get a complete AI-powered marketing strategy</p>
-      </div>
+    <div className="page-content">
 
-      {/* Goal Input */}
-      <div className="goal-input-container" style={{ marginBottom: 'var(--space-8)' }}>
-        <div className="goal-input-label">What do you want to achieve?</div>
-        <div className="goal-input-sublabel">Our Persona Engine + Gemini AI will analyze your customers and recommend the best strategy</div>
-        <div className="goal-input-wrapper">
-          <input
-            className="goal-input"
-            type="text"
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            placeholder="e.g., Bring back dormant customers"
-            onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-            id="strategist-goal-input"
-          />
+      {/* ── Header ────────────────────────────────────────────────────── */}
+      <div className="page-header" style={{ marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>
+              🧠 AI Revenue Strategist
+            </h1>
+            <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: '14px' }}>
+              Your AI has proactively scanned your customer base and discovered actionable opportunities.
+            </p>
+            <div style={{
+              marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)',
+              fontStyle: 'italic', padding: '6px 10px',
+              background: 'var(--surface-card)', borderRadius: '6px',
+              borderLeft: '3px solid var(--accent-primary)', display: 'inline-block',
+            }}>
+              The Opportunity Engine is deterministic. Gemini enriches strategy narratives only.
+            </div>
+          </div>
           <LoadingButton
-            loading={loading}
-            loadingText="Analyzing..."
-            icon={<Send size={18} />}
-            onClick={() => handleAnalyze()}
-            disabled={loading}
-            id="strategist-submit-btn"
-            style={{ padding: 'var(--space-4) var(--space-6)', borderRadius: 'var(--radius-lg)', background: 'white', color: 'var(--color-primary-700)', fontWeight: 700, fontSize: 'var(--text-md)', whiteSpace: 'nowrap' }}
+            onClick={() => loadOpportunities(true)}
+            loading={refreshing}
+            className="btn btn-secondary"
+            style={{ whiteSpace: 'nowrap' }}
           >
-            Analyze
+            🔄 Refresh Scan
           </LoadingButton>
         </div>
       </div>
 
-      {/* Loading State */}
-      {loading && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
-          <div className="spinner spinner-lg" style={{ margin: '0 auto var(--space-4)' }} />
-          <p style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-md)' }}>
-            <Sparkles size={16} style={{ display: 'inline', verticalAlign: 'middle' }} /> AI is analyzing your customer data and crafting a strategy...
-          </p>
-        </motion.div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="card" style={{ borderColor: 'var(--color-error-500)', background: 'var(--color-error-50)', marginBottom: 'var(--space-6)' }}>
-          <div className="flex items-center gap-3">
-            <AlertCircle size={20} color="var(--color-error-500)" />
-            <span style={{ color: 'var(--color-error-600)' }}>{error}</span>
-          </div>
+      {/* ── Phase 1: Opportunity Feed ──────────────────────────────────── */}
+      <section style={{ marginBottom: '48px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>
+            Discovered Opportunities
+          </h2>
+          {!loadingOpps && opportunities.length > 0 && (
+            <span style={{
+              background: 'var(--accent-primary)', color: '#fff',
+              borderRadius: '999px', padding: '2px 10px', fontSize: '12px', fontWeight: 700,
+            }}>
+              {opportunities.length}
+            </span>
+          )}
         </div>
-      )}
 
-      {/* Strategy Results */}
-      <AnimatePresence>
-        {strategy && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+        {loadingOpps ? (
+          <div className="opp-skeleton-grid">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="opp-skeleton-card skeleton" />
+            ))}
+          </div>
+        ) : opportunities.length === 0 ? (
+          <div className="empty-state">
+            <p>No active opportunities found. Click Refresh Scan to re-analyse.</p>
+          </div>
+        ) : (
+          <div className="opp-card-grid">
+            {opportunities.map(opp => {
+              const meta = OPP_TYPE_LABELS[opp.opportunity_type] || { icon: '💡', label: opp.opportunity_type, color: '#6366f1' };
+              const isActiveInvestigation = investigatedFor === opp.id;
+              const isInvestigating = investigatingId === opp.id;
+              const isDismissing = dismissingId === opp.id;
 
-            {/* Card 1: Goal Understanding */}
-            {visibleCards >= 1 && (
-              <motion.div className="strategy-card goal" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-                <span className="strategy-card-label"><Target size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Goal Understanding</span>
-                <h3>{strategy.goal_summary}</h3>
-              </motion.div>
-            )}
-
-            {/* Card 2: Audience Discovery */}
-            {visibleCards >= 2 && (
-              <motion.div className="strategy-card audience" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-                <span className="strategy-card-label"><Users size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Audience Discovery</span>
-                <h3>{strategy.audience.segment_name}</h3>
-                <div className="grid-3" style={{ marginBottom: 'var(--space-4)' }}>
-                  <div className="metric-card card-sm">
-                    <div className="metric-card-value">{strategy.audience.customer_count.toLocaleString()}</div>
-                    <div className="metric-card-label">Customers</div>
-                  </div>
-                  <div className="metric-card card-sm">
-                    <div className="metric-card-value">{formatCurrency(strategy.audience.revenue_opportunity)}</div>
-                    <div className="metric-card-label">Revenue Opportunity</div>
-                  </div>
-                  <div className="metric-card card-sm">
-                    <div className="metric-card-value">{strategy.audience.characteristics.length}</div>
-                    <div className="metric-card-label">Key Traits</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-                  {strategy.audience.characteristics.map((c, i) => (
-                    <span key={i} className="badge badge-primary">{c}</span>
-                  ))}
-                </div>
-                <div className="decision-reasoning">
-                  <strong>Reasoning:</strong> {strategy.audience.reasoning}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Card 3: Strategy Recommendation */}
-            {visibleCards >= 3 && (
-              <motion.div className="strategy-card strategy" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-                <span className="strategy-card-label"><Lightbulb size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Recommended Strategy</span>
-                <h3>{strategy.strategy.campaign_type}</h3>
-                <p style={{ color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)' }}>{strategy.strategy.approach}</p>
-                <div className="grid-2" style={{ marginBottom: 'var(--space-4)' }}>
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)', marginBottom: 'var(--space-1)' }}>Confidence</div>
-                    <div className="flex items-center gap-2">
-                      <div className="progress-bar" style={{ flex: 1 }}>
-                        <div className="progress-bar-fill" style={{ width: `${strategy.strategy.confidence_score * 100}%` }} />
-                      </div>
-                      <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)' }}>{(strategy.strategy.confidence_score * 100).toFixed(0)}%</span>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)', marginBottom: 'var(--space-1)' }}>Expected Outcome</div>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{strategy.strategy.expected_outcome}</div>
-                  </div>
-                </div>
-                <div className="decision-reasoning">
-                  <strong>Reasoning:</strong> {strategy.strategy.reasoning}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Card 4: Channel Recommendation */}
-            {visibleCards >= 4 && (
-              <motion.div className="strategy-card channel" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-                <span className="strategy-card-label"><MessageSquare size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Channel Recommendation</span>
-                <h3>
-                  <span className={`badge badge-${strategy.channel.primary_channel}`} style={{ fontSize: 'var(--text-sm)', padding: '4px 12px' }}>
-                    {strategy.channel.primary_channel.toUpperCase()}
-                  </span>
-                </h3>
-                <div className="grid-4" style={{ marginBottom: 'var(--space-4)' }}>
-                  {Object.entries(strategy.channel.channel_metrics).map(([ch, metrics]) => (
-                    <div key={ch} className="card card-sm" style={{ borderLeft: `3px solid ${channelColors[ch] || '#6366f1'}` }}>
-                      <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: 'var(--space-2)', textTransform: 'capitalize' }}>{ch}</div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
-                        <div>Read: {(metrics.read_rate * 100).toFixed(0)}%</div>
-                        <div>Click: {(metrics.click_rate * 100).toFixed(0)}%</div>
-                        <div>Convert: {(metrics.conversion_rate * 100).toFixed(0)}%</div>
+              return (
+                <div
+                  key={opp.id}
+                  className={`opp-card ${isActiveInvestigation ? 'opp-card--active' : ''}`}
+                  style={{ borderLeftColor: meta.color }}
+                >
+                  {/* Card header */}
+                  <div className="opp-card__header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: '18px' }}>{meta.icon}</span>
+                      <div>
+                        <div style={{
+                          fontSize: '11px', fontWeight: 700, color: meta.color,
+                          textTransform: 'uppercase', letterSpacing: '0.05em',
+                        }}>
+                          {meta.label}
+                        </div>
+                        <h3 style={{
+                          margin: 0, fontSize: '14px', fontWeight: 700,
+                          lineHeight: 1.3, color: 'var(--text-primary)',
+                        }}>
+                          {opp.title}
+                        </h3>
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div className="decision-reasoning">
-                  <strong>Reasoning:</strong> {strategy.channel.reasoning}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Card 5: Message Draft */}
-            {visibleCards >= 5 && (
-              <motion.div className="strategy-card message" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-                <span className="strategy-card-label"><MessageSquare size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Campaign Draft</span>
-                <div className="card" style={{ background: 'var(--color-gray-50)', marginBottom: 'var(--space-4)' }}>
-                  <h3 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-2)' }}>{strategy.message.headline}</h3>
-                  <p style={{ color: 'var(--color-gray-600)', lineHeight: 'var(--leading-relaxed)', marginBottom: 'var(--space-3)' }}>{strategy.message.body}</p>
-                  <button className="btn btn-primary btn-sm">{strategy.message.cta}</button>
-                </div>
-                <div className="flex gap-2" style={{ flexWrap: 'wrap', marginBottom: 'var(--space-2)' }}>
-                  {strategy.message.personalization_tokens.map((t, i) => (
-                    <span key={i} className="badge badge-gray" style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{t}</span>
-                  ))}
-                </div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>Tone: {strategy.message.tone}</div>
-              </motion.div>
-            )}
-
-            {/* Card 6: Performance Prediction */}
-            {visibleCards >= 6 && (
-              <motion.div className="strategy-card performance" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-                <span className="strategy-card-label"><BarChart3 size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Predicted Performance</span>
-                <div className="grid-3" style={{ gap: 'var(--space-4)' }}>
-                  {[
-                    { label: 'Estimated Reach', value: strategy.performance.estimated_reach.toLocaleString() },
-                    { label: 'Estimated Opens', value: strategy.performance.estimated_opens.toLocaleString() },
-                    { label: 'Estimated Clicks', value: strategy.performance.estimated_clicks.toLocaleString() },
-                    { label: 'Estimated Conversions', value: strategy.performance.estimated_conversions.toLocaleString() },
-                    { label: 'Estimated Revenue', value: formatCurrency(strategy.performance.estimated_revenue) },
-                  ].map((m) => (
-                    <div key={m.label} className="metric-card card-sm">
-                      <div className="metric-card-value">{m.value}</div>
-                      <div className="metric-card-label">{m.label}</div>
+                    {/* Priority score ring */}
+                    <div className="priority-ring" style={{
+                      '--ring-color': priorityColor(opp.priority_score ?? 50),
+                    } as React.CSSProperties}>
+                      <span>{opp.priority_score ?? 50}</span>
                     </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
+                  </div>
 
-            {/* Card 7: Decision Reasoning + Launch */}
-            {visibleCards >= 7 && (
-              <motion.div className="strategy-card decisions" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-                <span className="strategy-card-label"><AlertCircle size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Decision Reasoning</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
-                  {strategy.decision_reasoning.map((r, i) => (
-                    <div key={i} className="decision-reasoning">{r}</div>
-                  ))}
-                </div>
+                  {/* Metrics row */}
+                  <div className="opp-card__metrics">
+                    <div className="opp-metric">
+                      <span className="opp-metric__label">Revenue at stake</span>
+                      <span className="opp-metric__value" style={{ color: '#ef4444' }}>
+                        {formatRevenue(opp.potential_revenue)}
+                      </span>
+                    </div>
+                    <div className="opp-metric">
+                      <span className="opp-metric__label">Customers affected</span>
+                      <span className="opp-metric__value">{opp.affected_customers.toLocaleString()}</span>
+                    </div>
+                  </div>
 
-                {launched ? (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="btn btn-primary btn-lg w-full"
-                    style={{ justifyContent: 'center', background: 'var(--color-success-500)', border: 'none', cursor: 'default' }}
-                  >
-                    <CheckCircle2 size={20} /> Campaign Queued! Redirecting...
-                  </motion.div>
-                ) : (
-                  <LoadingButton
-                    loading={launchLoading}
-                    loadingText="Launching..."
-                    icon={<Rocket size={20} />}
-                    size="lg"
-                    onClick={handleLaunchCampaign}
-                    id="launch-campaign-btn"
-                    className="w-full"
-                    style={{ justifyContent: 'center' }}
-                  >
-                    Launch Campaign
-                  </LoadingButton>
-                )}
-              </motion.div>
-            )}
+                  {/* Key drivers */}
+                  {opp.key_drivers && opp.key_drivers.length > 0 && (
+                    <div className="opp-card__drivers">
+                      <div className="opp-card__drivers-title">Why this exists</div>
+                      <ul className="key-driver-list">
+                        {opp.key_drivers.slice(0, 3).map((d, i) => (
+                          <li key={i}>{d}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="opp-card__actions">
+                    <LoadingButton
+                      onClick={() => handleInvestigate(opp)}
+                      loading={isInvestigating}
+                      className="btn btn-primary"
+                      style={{ flex: 1, fontSize: '13px' }}
+                    >
+                      🔍 Investigate Opportunity
+                    </LoadingButton>
+                    <LoadingButton
+                      onClick={() => handleDismiss(opp.id)}
+                      loading={isDismissing}
+                      className="btn btn-secondary"
+                      style={{ fontSize: '13px' }}
+                    >
+                      Dismiss
+                    </LoadingButton>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
-      </AnimatePresence>
+      </section>
+
+      {/* ── Phase 2–4: Investigation Panel ───────────────────────────── */}
+      {investigation && investigatedFor && (
+        <section className="investigation-panel" style={{ marginBottom: '48px' }}>
+          {/* Breadcrumb phase indicator */}
+          <div className="phase-trail">
+            <span className="phase-trail__step phase-trail__step--done">Opportunity</span>
+            <span className="phase-trail__sep">›</span>
+            <span className="phase-trail__step phase-trail__step--done">Investigation</span>
+            <span className="phase-trail__sep">›</span>
+            <span className="phase-trail__step phase-trail__step--done">Root Cause</span>
+            <span className="phase-trail__sep">›</span>
+            <span className="phase-trail__step phase-trail__step--active">Recommendation</span>
+          </div>
+
+          <div className="investigation-panel__title">
+            Investigation: {investigation.opportunity_title}
+          </div>
+
+          {/* ── Phase 2a: Why Now? ─────────────────────────────────── */}
+          <div className="why-now-block">
+            <div className="why-now-block__label">⏰ Why Now?</div>
+            <p className="why-now-block__text">{investigation.why_now}</p>
+          </div>
+
+          {/* ── Phase 2b: Root Cause + Confidence ────────────────── */}
+          <div className="diag-row">
+            <div className="diag-card">
+              <div className="diag-card__title">🔎 Root Cause</div>
+              <p className="diag-card__body">{investigation.root_cause}</p>
+            </div>
+
+            <div className="diag-card">
+              <div className="diag-card__title">
+                📊 Confidence &amp; Evidence
+                <span className="confidence-badge">
+                  {investigation.confidence_score}%
+                </span>
+              </div>
+              <ul className="evidence-list">
+                {investigation.evidence.map((e, i) => (
+                  <li key={i} className="evidence-chip">{e}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* ── Phase 3: Alternative Actions ─────────────────────── */}
+          <div style={{ marginTop: '24px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Alternative Actions Evaluated
+            </div>
+            <div className="candidate-actions-grid">
+              {investigation.options.map((opt, idx) => {
+                const isRecommended = idx === investigation.recommended_index;
+                return (
+                  <div
+                    key={idx}
+                    className={`candidate-action-card ${isRecommended ? 'candidate-action-card--recommended' : ''}`}
+                  >
+                    {isRecommended && (
+                      <div className="recommended-badge">✓ Recommended</div>
+                    )}
+                    <div className="candidate-action-card__name">{opt.name}</div>
+                    <p className="candidate-action-card__desc">{opt.description}</p>
+
+                    <div className="candidate-action-card__metrics">
+                      <div className="action-metric">
+                        <span className="action-metric__label">Expected Revenue</span>
+                        <span className="action-metric__value" style={{ color: '#10b981' }}>
+                          {formatRevenue(opt.expected_revenue)}
+                        </span>
+                      </div>
+                      <div className="action-metric">
+                        <span className="action-metric__label">Conversions</span>
+                        <span className="action-metric__value">{opt.expected_conversions.toLocaleString()}</span>
+                      </div>
+                      <div className="action-metric">
+                        <span className="action-metric__label">Conv. Rate</span>
+                        <span className="action-metric__value">{(opt.conversion_rate * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="action-metric">
+                        <span className="action-metric__label">Margin Impact</span>
+                        <span className="action-metric__value">{opt.margin_impact}</span>
+                      </div>
+                    </div>
+
+                    <div className="candidate-action-card__pros-cons">
+                      <div>
+                        <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, marginBottom: '4px' }}>Pros</div>
+                        {opt.pros.map((p, i) => <div key={i} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>+ {p}</div>)}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11px', color: '#ef4444', fontWeight: 600, marginBottom: '4px' }}>Cons</div>
+                        {opt.cons.map((c, i) => <div key={i} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>− {c}</div>)}
+                      </div>
+                    </div>
+
+                    {/* Impact/Effort/Action — ONLY on the recommended option */}
+                    {isRecommended && (
+                      <div className="recommendation-footer">
+                        <div className="ie-row">
+                          <div className="ie-item">
+                            <span className="ie-label">Impact</span>
+                            <ImpactEffortBadge value={investigation.impact} type="impact" />
+                          </div>
+                          <div className="ie-item">
+                            <span className="ie-label">Effort</span>
+                            <ImpactEffortBadge value={investigation.effort} type="effort" />
+                          </div>
+                          <div className="ie-item" style={{ flex: 1 }}>
+                            <span className="ie-label">Action</span>
+                            <span className="recommended-action-label">
+                              {investigation.recommended_action}
+                            </span>
+                          </div>
+                        </div>
+                        <p style={{
+                          margin: '10px 0 12px', fontSize: '13px',
+                          color: 'var(--text-muted)', fontStyle: 'italic',
+                        }}>
+                          {investigation.selection_reasoning}
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <LoadingButton
+                            onClick={handleLaunchFromInvestigation}
+                            loading={false}
+                            className="btn btn-primary"
+                            style={{ flex: 1 }}
+                          >
+                            🚀 Launch Campaign
+                          </LoadingButton>
+                          <button
+                            className="btn btn-secondary"
+                            onClick={() => setGoal(investigation.recommended_goal)}
+                            style={{ flex: 1 }}
+                          >
+                            ✏️ Customize Strategy
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Secondary: Custom Goal Input ─────────────────────────────── */}
+      <section className="goal-section">
+        <div className="goal-section__header">
+          <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
+            Or describe a custom goal
+          </h2>
+          <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '13px' }}>
+            Tell the AI what you want to achieve and it will generate a full strategy.
+          </p>
+        </div>
+
+        <form onSubmit={handleAnalyze} style={{ marginTop: '14px' }}>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input
+              id="goal-input"
+              type="text"
+              value={goal}
+              onChange={e => setGoal(e.target.value)}
+              placeholder='e.g. "I want to bring back dormant customers before the festive season"'
+              className="input"
+              style={{ flex: 1 }}
+            />
+            <LoadingButton
+              type="submit"
+              loading={analyzing}
+              disabled={!goal.trim()}
+              className="btn btn-primary"
+            >
+              Analyze
+            </LoadingButton>
+          </div>
+        </form>
+
+        {strategyError && (
+          <div className="alert alert-error" style={{ marginTop: '12px' }}>{strategyError}</div>
+        )}
+
+        {strategy && (
+          <div className="strategy-result" style={{ marginTop: '20px' }}>
+            <div className="strategy-result__summary">{strategy.goal_summary}</div>
+
+            <div className="strategy-grid">
+              <div className="strategy-block">
+                <div className="strategy-block__title">👥 Target Audience</div>
+                <div className="strategy-block__main">{strategy.audience.segment_name}</div>
+                <div className="strategy-block__sub">{strategy.audience.customer_count.toLocaleString()} customers · {formatRevenue(strategy.audience.revenue_opportunity)} opportunity</div>
+                <ul className="strategy-block__list">
+                  {strategy.audience.characteristics.map((c, i) => <li key={i}>{c}</li>)}
+                </ul>
+              </div>
+
+              <div className="strategy-block">
+                <div className="strategy-block__title">🎯 Strategy</div>
+                <div className="strategy-block__main">{strategy.strategy.campaign_type}</div>
+                <div className="strategy-block__sub">{strategy.strategy.expected_outcome}</div>
+                <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {strategy.strategy.reasoning}
+                </div>
+              </div>
+
+              <div className="strategy-block">
+                <div className="strategy-block__title">📡 Recommended Channel</div>
+                <div className="strategy-block__main" style={{ textTransform: 'capitalize' }}>
+                  {strategy.channel.primary_channel}
+                </div>
+                <div className="strategy-block__sub">{strategy.channel.reasoning}</div>
+              </div>
+
+              <div className="strategy-block">
+                <div className="strategy-block__title">📊 Performance Forecast</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
+                  {[
+                    ['Reach', strategy.performance.estimated_reach.toLocaleString()],
+                    ['Opens', strategy.performance.estimated_opens.toLocaleString()],
+                    ['Conversions', strategy.performance.estimated_conversions.toLocaleString()],
+                    ['Revenue', formatRevenue(strategy.performance.estimated_revenue)],
+                  ].map(([label, val]) => (
+                    <div key={label}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{label}</div>
+                      <div style={{ fontSize: '15px', fontWeight: 700 }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="strategy-message">
+              <div className="strategy-block__title">✉️ Suggested Message</div>
+              <div className="strategy-message__headline">{strategy.message.headline}</div>
+              <div className="strategy-message__body">{strategy.message.body}</div>
+              <div className="strategy-message__cta">{strategy.message.cta}</div>
+            </div>
+
+            <button
+              className="btn btn-primary"
+              style={{ marginTop: '16px' }}
+              onClick={() => navigate('/campaigns')}
+            >
+              🚀 Launch Campaign
+            </button>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

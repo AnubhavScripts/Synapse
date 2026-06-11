@@ -2,7 +2,7 @@ import axios from 'axios';
 import type {
   CustomerListResponse, Customer, Segment, Campaign, CampaignFunnel,
   DecisionLog, Activity, Opportunity, AnalyticsOverview, ChannelPerformance,
-  StrategyResponse
+  StrategyResponse, OpportunityInvestigationResponse,
 } from '../types';
 
 const api = axios.create({
@@ -49,13 +49,20 @@ export const getCampaignTimeline = (id: string) =>
 export const getCampaignDecisions = (id: string) =>
   api.get<DecisionLog[]>(`/campaigns/${id}/decisions`).then(r => r.data);
 
-// AI Strategist
+// AI Strategist — goal-driven (secondary entry point)
 export const analyzeGoal = (goal: string) =>
   api.post<StrategyResponse>('/strategist/analyze', { goal }).then(r => r.data);
+
+// AI Strategist — Opportunity Investigation (primary flow)
+export const investigateOpportunity = (opportunity_id: string) =>
+  api.post<OpportunityInvestigationResponse>('/strategist/investigate', { opportunity_id }).then(r => r.data);
 
 // Opportunities
 export const getOpportunities = () =>
   api.get<Opportunity[]>('/opportunities').then(r => r.data);
+
+export const refreshOpportunities = () =>
+  api.post<Opportunity[]>('/opportunities/refresh').then(r => r.data);
 
 export const dismissOpportunity = (id: string) =>
   api.post(`/opportunities/${id}/dismiss`).then(r => r.data);
