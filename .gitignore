@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+/frontend/node_modules/
+/frontend/dist/
+/frontend/dist-ssr/
+
+# Python Virtual Environments & Packages
+.venv
+venv/
+env/
+backend/venv/
+*.pyc
+__pycache__/
+
+# Local Configs & Secrets
+.env
+backend/.env
+*.local
+pyrightconfig.json
+/frontend/pyrightconfig.json
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS Files
+.DS_Store
+Thumbs.db
