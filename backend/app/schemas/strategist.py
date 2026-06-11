@@ -2,6 +2,8 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 
+# ── Existing schemas (unchanged) ──────────────────────────────────────────
+
 class StrategyRequest(BaseModel):
     goal: str
 
@@ -52,3 +54,53 @@ class StrategyResponse(BaseModel):
     message: MessageDraft
     performance: PerformancePrediction
     decision_reasoning: list[str] = Field(description="Key decisions and their reasoning")
+
+
+# ── v2 — Opportunity Investigation schemas ────────────────────────────────
+
+class InvestigateRequest(BaseModel):
+    opportunity_id: str
+
+
+class CandidateAction(BaseModel):
+    """One of the 3 alternative actions compared during an investigation."""
+    name: str                    # e.g. "10% Win-Back Discount"
+    description: str
+    expected_revenue: float
+    expected_conversions: int
+    conversion_rate: float       # e.g. 0.118
+    margin_impact: str           # "Low" | "Medium" | "High"
+    pros: list[str]
+    cons: list[str]
+
+
+class OpportunityInvestigationResponse(BaseModel):
+    """
+    Full investigation report for an opportunity.
+
+    Flow:
+      Opportunity → Root Cause + Why Now? → Evidence + Confidence
+              → 3 Candidate Actions → Recommended Action (Impact / Effort / Label)
+    """
+    opportunity_id: str
+    opportunity_title: str
+
+    # ── Diagnostic Layer ──
+    root_cause: str              # Why this opportunity/risk exists
+    why_now: str                 # Urgency: trend delta, revenue risk change
+
+    # ── Evidence Layer ──
+    confidence_score: int        # 0–100, e.g. 89
+    evidence: list[str]          # ["Similar campaigns achieved 11.8% conversion", ...]
+
+    # ── Alternative Actions Layer ──
+    options: list[CandidateAction]   # Always 3, type-specific (not hardcoded globally)
+
+    # ── Recommendation Layer (winning option only) ──
+    recommended_index: int       # Index into options[]
+    selection_reasoning: str     # Why this option was chosen over the others
+    impact: str                  # "High" | "Medium" | "Low"
+    effort: str                  # "High" | "Medium" | "Low"
+    recommended_action: str      # "Launch immediately" | "Review manually" | "Schedule for off-peak"
+
+    recommended_goal: str        # Pre-fill text for the existing /analyze endpoint
