@@ -148,49 +148,6 @@ export default function OpportunityCenter() {
         )}
       </section>
 
-      {/* ── Charts ────────────────────────────────────────────────── */}
-      <section className="section">
-        <h2 className="section-title">Revenue & Customer Health</h2>
-        <div className="grid-2">
-          <div className="chart-container">
-            <h3>Revenue Trend</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={revenueData}>
-                <defs>
-                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.15} />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tickFormatter={(v) => `₹${v/1000}K`} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v) => [`₹${Number(v).toLocaleString()}`, 'Revenue']} />
-                <Area type="monotone" dataKey="revenue" stroke="#6366f1" fill="url(#revGrad)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="chart-container">
-            <h3>Customer Growth</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={customerGrowth}>
-                <defs>
-                  <linearGradient id="custGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.15} />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v) => [Number(v).toLocaleString(), 'Customers']} />
-                <Area type="monotone" dataKey="customers" stroke="#10b981" fill="url(#custGrad)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </section>
-
       {/* ── AI Opportunity Feed ────────────────────────────────────── */}
       <section className="section">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
@@ -280,6 +237,49 @@ export default function OpportunityCenter() {
             })}
           </div>
         )}
+      </section>
+
+      {/* ── Charts ────────────────────────────────────────────────── */}
+      <section className="section">
+        <h2 className="section-title">Revenue & Customer Health</h2>
+        <div className="grid-2">
+          <div className="chart-container">
+            <h3>Revenue Trend</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={revenueData}>
+                <defs>
+                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.15} />
+                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis tickFormatter={(v) => `₹${v/1000}K`} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v) => [`₹${Number(v).toLocaleString()}`, 'Revenue']} />
+                <Area type="monotone" dataKey="revenue" stroke="#6366f1" fill="url(#revGrad)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="chart-container">
+            <h3>Customer Growth</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={customerGrowth}>
+                <defs>
+                  <linearGradient id="custGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.15} />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v) => [Number(v).toLocaleString(), 'Customers']} />
+                <Area type="monotone" dataKey="customers" stroke="#10b981" fill="url(#custGrad)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </section>
     </div>
   );
