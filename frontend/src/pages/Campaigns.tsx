@@ -27,7 +27,12 @@ export default function CampaignsPage() {
   const [tab, setTab] = useState<'overview' | 'funnel' | 'timeline' | 'decisions'>('overview');
   const [launchingIds, setLaunchingIds] = useState<Set<string>>(new Set());
 
-  const { data: campaigns, refetch } = useQuery<Campaign[]>({ queryKey: ['campaigns'], queryFn: getCampaigns });
+  const { data: campaigns, isLoading: loadingCampaigns, refetch } = useQuery<Campaign[]>({ queryKey: ['campaigns'], queryFn: getCampaigns });
+
+  function formatDate(d: string | null) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+  }
 
   useEffect(() => { document.title = 'ReachIQ — Campaigns'; }, []);
 
@@ -67,12 +72,20 @@ export default function CampaignsPage() {
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {loadingCampaigns ? (
+          <div style={{ padding: '20px' }}>
+            {[1,2,3,4,5].map(i => (
+              <div key={i} className="skeleton" style={{ height: 52, borderRadius: 8, marginBottom: 10 }} />
+            ))}
+          </div>
+        ) : (
         <table className="data-table">
           <thead>
             <tr>
               <th>Campaign</th>
               <th>Audience</th>
               <th>Channel</th>
+              <th>Date</th>
               <th>Status</th>
               <th>Sent</th>
               <th>Conversions</th>
@@ -89,6 +102,10 @@ export default function CampaignsPage() {
                 </td>
                 <td>{c.segment_name || '—'}</td>
                 <td><span className={`badge badge-${c.channel}`}>{c.channel}</span></td>
+                <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)', whiteSpace: 'nowrap' }}>
+                  <div>{formatDate(c.created_at)}</div>
+                  {c.launched_at && <div style={{ color: 'var(--color-primary-500)' }}>↗ {formatDate(c.launched_at)}</div>}
+                </td>
                 <td><span className={`badge badge-${statusColors[c.status] || 'gray'}`}>{c.status}</span></td>
                 <td>{c.actual_sent.toLocaleString()}</td>
                 <td>{c.actual_converted.toLocaleString()}</td>
@@ -109,6 +126,7 @@ export default function CampaignsPage() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
 
       {/* Campaign Detail Panel */}

@@ -1491,6 +1491,31 @@ a {
   color: var(--color-gray-800);
 }
 
+/* ── Segment card active/selected state ──────── */
+.segment-card--active {
+  border-color: var(--color-primary-300);
+  box-shadow: 0 0 0 2px var(--color-primary-200), var(--shadow-md);
+  background: var(--color-primary-50);
+}
+
+/* ── Skeleton loading shimmer ─────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--color-gray-100) 25%,
+    var(--color-gray-50) 50%,
+    var(--color-gray-100) 75%
+  );
+  background-size: 1200px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: var(--radius-md);
+}
+
+
 /* ── Chart containers ─────────────────────── */
 .chart-container {
   background: var(--color-white);

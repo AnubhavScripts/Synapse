@@ -32,7 +32,7 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [decisions, setDecisions] = useState<DecisionLog[]>([]);
 
-  const { data } = useQuery<CustomerListResponse>({
+  const { data, isLoading: loadingCustomers } = useQuery<CustomerListResponse>({
     queryKey: ['customers', search, riskFilter],
     queryFn: () => getCustomers({ search, risk_level: riskFilter, page_size: 50 }),
   });
@@ -73,6 +73,13 @@ export default function CustomersPage() {
 
       {/* Customer Table */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {loadingCustomers ? (
+          <div style={{ padding: '20px' }}>
+            {[1,2,3,4,5,6,7].map(i => (
+              <div key={i} className="skeleton" style={{ height: 52, borderRadius: 8, marginBottom: 10 }} />
+            ))}
+          </div>
+        ) : (
         <table className="data-table">
           <thead>
             <tr>
@@ -112,6 +119,7 @@ export default function CustomersPage() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
       <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>
         Showing {data?.customers.length || 0} of {data?.total || 0} customers

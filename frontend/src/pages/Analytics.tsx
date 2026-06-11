@@ -17,8 +17,8 @@ const channelColors: Record<string, string> = {
 };
 
 export default function AnalyticsPage() {
-  const { data: overview } = useQuery<AnalyticsOverview>({ queryKey: ['analytics-overview'], queryFn: getAnalyticsOverview });
-  const { data: channels } = useQuery<ChannelPerformance[]>({ queryKey: ['channel-perf'], queryFn: getChannelPerformance });
+  const { data: overview, isLoading: loadingOverview } = useQuery<AnalyticsOverview>({ queryKey: ['analytics-overview'], queryFn: getAnalyticsOverview });
+  const { data: channels, isLoading: loadingChannels } = useQuery<ChannelPerformance[]>({ queryKey: ['channel-perf'], queryFn: getChannelPerformance });
   const { data: audiences } = useQuery({ queryKey: ['audience-perf'], queryFn: getAudiencePerformance });
 
   useEffect(() => { document.title = 'ReachIQ — Analytics'; }, []);
@@ -48,6 +48,11 @@ export default function AnalyticsPage() {
       {/* Executive Metrics */}
       <section className="section">
         <h2 className="section-title"><BarChart3 size={20} /> Executive Metrics</h2>
+        {loadingOverview ? (
+          <div className="grid-3" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+            {[1,2,3,4,5].map(i => <div key={i} className="skeleton" style={{ height: 90, borderRadius: 12 }} />)}
+          </div>
+        ) : (
         <div className="grid-3" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
           {execMetrics.map((m, i) => (
             <motion.div key={m.label} className="metric-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
@@ -59,11 +64,18 @@ export default function AnalyticsPage() {
             </motion.div>
           ))}
         </div>
+        )}
       </section>
 
       {/* Channel Performance */}
       <section className="section">
         <h2 className="section-title">Channel Performance</h2>
+        {loadingChannels ? (
+          <div className="grid-2">
+            <div className="skeleton" style={{ height: 340, borderRadius: 12 }} />
+            <div className="skeleton" style={{ height: 340, borderRadius: 12 }} />
+          </div>
+        ) : (
         <div className="grid-2">
           <div className="chart-container">
             <h3>Channel Metrics Comparison</h3>
@@ -104,6 +116,7 @@ export default function AnalyticsPage() {
             </ResponsiveContainer>
           </div>
         </div>
+        )}
       </section>
 
       {/* Audience Performance */}
