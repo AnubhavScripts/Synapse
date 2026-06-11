@@ -1,13 +1,33 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.database import create_tables
+from app.core.database import create_tables, engine
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+async def run_migrations():
+    """
+    Option A migration — ALTER TABLE IF NOT EXISTS.
+    Safe to run repeatedly. Preserves all existing data.
+    """
+    migration_sql = [
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS priority_score INTEGER DEFAULT 50",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS key_drivers JSONB DEFAULT '[]'::jsonb",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS metadata_json JSONB DEFAULT '{}'::jsonb",
+    ]
+    async with engine.begin() as conn:
+        for sql in migration_sql:
+            await conn.execute(__import__("sqlalchemy").text(sql))
+    logger.info("✅ Database migrations applied (ALTER TABLE IF NOT EXISTS)")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables
+    # Startup: create tables, then apply additive migrations
     await create_tables()
+    await run_migrations()
     yield
     # Shutdown
 
@@ -15,7 +35,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="ReachIQ",
     description="AI-Native Customer Engagement CRM",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -50,7 +70,7 @@ app.include_router(decisions_router)
 
 @app.get("/")
 async def root():
-    return {"name": "ReachIQ", "version": "1.0.0", "status": "running"}
+    return {"name": "ReachIQ", "version": "2.0.0", "status": "running"}
 
 
 @app.get("/health")
