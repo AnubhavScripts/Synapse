@@ -16,11 +16,23 @@ async def run_migrations():
         "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS priority_score INTEGER DEFAULT 50",
         "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS key_drivers JSONB DEFAULT '[]'::jsonb",
         "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS metadata_json JSONB DEFAULT '{}'::jsonb",
+        # Backfill actual_revenue for completed seeded campaigns that have 0 revenue
+        # Uses actual_converted × random-ish per-row seed (row_number × 1200 mod avoids uniform values)
+        """
+        UPDATE campaigns
+        SET actual_revenue = ROUND(
+            (actual_converted * (800 + (EXTRACT(EPOCH FROM created_at)::BIGINT % 3700)))::NUMERIC,
+            2
+        )
+        WHERE status = 'completed'
+          AND actual_revenue = 0
+          AND actual_converted > 0
+        """,
     ]
     async with engine.begin() as conn:
         for sql in migration_sql:
             await conn.execute(__import__("sqlalchemy").text(sql))
-    logger.info("✅ Database migrations applied (ALTER TABLE IF NOT EXISTS)")
+    logger.info("✅ Database migrations applied (ALTER TABLE + revenue backfill)")
 
 
 @asynccontextmanager

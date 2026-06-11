@@ -49,6 +49,10 @@ class OpportunityOut(BaseModel):
     status: str
     ai_reasoning: str
     created_at: datetime
+    # v2 investigation fields
+    priority_score: int = 50
+    key_drivers: list = []
+    metadata_json: dict = {}
 
     model_config = {"from_attributes": True}
 
