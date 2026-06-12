@@ -250,3 +250,34 @@ export interface OpportunityInvestigationResponse {
 
   recommended_goal: string;    // Pre-fills the /analyze goal input
 }
+
+export interface CampaignMessageHistoryItem {
+  status: string;
+  at: string;
+  revenue?: number;
+  error_message?: string | null;
+}
+
+export interface CampaignMessage {
+  id: string;
+  campaign_id: string;
+  customer_id: string;
+  customer_name: string;
+  channel: string;
+  status: string;
+  sequence: number;
+  history: CampaignMessageHistoryItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignTimelineEvent {
+  id: string;
+  timestamp: string;
+  service: 'crm' | 'gateway' | 'callback' | 'analytics';
+  event_type: string;
+  title: string;
+  description: string;
+  status: 'success' | 'processing' | 'failed';
+  metadata?: Record<string, any> | null;
+}

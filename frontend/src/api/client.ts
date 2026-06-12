@@ -2,7 +2,7 @@ import axios from 'axios';
 import type {
   CustomerListResponse, Customer, Segment, Campaign, CampaignFunnel,
   DecisionLog, Activity, Opportunity, AnalyticsOverview, ChannelPerformance,
-  StrategyResponse, OpportunityInvestigationResponse,
+  StrategyResponse, OpportunityInvestigationResponse, CampaignMessage, CampaignTimelineEvent,
 } from '../types';
 
 const api = axios.create({
@@ -44,10 +44,13 @@ export const getCampaignFunnel = (id: string) =>
   api.get<CampaignFunnel>(`/campaigns/${id}/funnel`).then(r => r.data);
 
 export const getCampaignTimeline = (id: string) =>
-  api.get<Activity[]>(`/campaigns/${id}/timeline`).then(r => r.data);
+  api.get<CampaignTimelineEvent[]>(`/campaigns/${id}/timeline`).then(r => r.data);
 
 export const getCampaignDecisions = (id: string) =>
   api.get<DecisionLog[]>(`/campaigns/${id}/decisions`).then(r => r.data);
+
+export const getCampaignMessages = (id: string) =>
+  api.get<CampaignMessage[]>(`/campaigns/${id}/messages`).then(r => r.data);
 
 // AI Strategist — goal-driven (secondary entry point)
 export const analyzeGoal = (goal: string) =>
