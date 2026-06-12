@@ -42,3 +42,4 @@ class Campaign(Base):
     segment: Mapped["Segment | None"] = relationship(back_populates="campaigns", lazy="selectin")
     decision_logs: Mapped[list["DecisionLog"]] = relationship(back_populates="campaign")
     activities: Mapped[list["Activity"]] = relationship(back_populates="campaign")
+    messages: Mapped[list["CampaignMessage"]] = relationship(back_populates="campaign", cascade="all, delete-orphan")

@@ -59,3 +59,16 @@ class CampaignFunnelOut(BaseModel):
     clicked: int
     converted: int
     failed: int
+
+
+class CampaignTimelineEvent(BaseModel):
+    id: str
+    timestamp: datetime
+    service: str  # crm | gateway | callback | analytics
+    event_type: str
+    title: str
+    description: str
+    status: str  # success | processing | failed
+    metadata: Optional[dict] = None
+
+    model_config = {"from_attributes": True}

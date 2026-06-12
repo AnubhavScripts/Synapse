@@ -1,23 +1,25 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import create_tables, engine
-import logging
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
 
 async def run_migrations():
     """
-    Option A migration — ALTER TABLE IF NOT EXISTS.
-    Safe to run repeatedly. Preserves all existing data.
+    Additive ALTER TABLE migrations. Safe to run repeatedly on existing data.
+    Also adds the callback_events and dispatch_jobs tables if not yet created.
     """
     migration_sql = [
+        # Existing columns
         "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS priority_score INTEGER DEFAULT 50",
         "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS key_drivers JSONB DEFAULT '[]'::jsonb",
         "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS metadata_json JSONB DEFAULT '{}'::jsonb",
-        # Backfill actual_revenue for completed seeded campaigns that have 0 revenue
-        # Uses actual_converted × random-ish per-row seed (row_number × 1200 mod avoids uniform values)
+        # Backfill revenue for seeded completed campaigns
         """
         UPDATE campaigns
         SET actual_revenue = ROUND(
@@ -31,27 +33,39 @@ async def run_migrations():
     ]
     async with engine.begin() as conn:
         for sql in migration_sql:
-            await conn.execute(__import__("sqlalchemy").text(sql))
-    logger.info("✅ Database migrations applied (ALTER TABLE + revenue backfill)")
+            await conn.execute(text(sql))
+    logger.info("✅ Database migrations applied")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables, then apply additive migrations
-    await create_tables()
-    await run_migrations()
+    # ── Startup ───────────────────────────────────────────────────────────────
+    await create_tables()          # Creates all tables including callback_events, dispatch_jobs
+    await run_migrations()         # Additive column migrations
+
+    # Start the retry worker as a background task
+    from app.services.retry_worker import retry_worker
+    retry_task = asyncio.create_task(retry_worker())
+    logger.info("✅ Retry worker started")
+
     yield
-    # Shutdown
+
+    # ── Shutdown ──────────────────────────────────────────────────────────────
+    retry_task.cancel()
+    try:
+        await retry_task
+    except asyncio.CancelledError:
+        pass
+    logger.info("✅ Retry worker stopped")
 
 
 app = FastAPI(
-    title="ReachIQ",
-    description="AI-Native Customer Engagement CRM",
-    version="2.0.0",
+    title="ReachIQ CRM",
+    description="AI-Native Customer Engagement CRM — Service A",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -60,7 +74,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
+# ── Register Routers ──────────────────────────────────────────────────────────
 from app.api.customers import router as customers_router
 from app.api.segments import router as segments_router
 from app.api.campaigns import router as campaigns_router
@@ -69,6 +83,9 @@ from app.api.opportunities import router as opportunities_router
 from app.api.analytics import router as analytics_router
 from app.api.activities import router as activities_router
 from app.api.decisions import router as decisions_router
+
+# Note: dispatcher_router removed — Messaging Gateway now runs as a
+# separate service on port 8001 (run_gateway.py)
 
 app.include_router(customers_router)
 app.include_router(segments_router)
@@ -82,9 +99,9 @@ app.include_router(decisions_router)
 
 @app.get("/")
 async def root():
-    return {"name": "ReachIQ", "version": "2.0.0", "status": "running"}
+    return {"name": "ReachIQ CRM", "version": "3.0.0", "status": "running"}
 
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "service": "crm-api"}

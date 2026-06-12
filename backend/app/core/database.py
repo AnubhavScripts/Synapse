@@ -63,4 +63,5 @@ async def get_db():
 async def create_tables():
     async with engine.begin() as conn:
         from app.models import customer, persona, segment, campaign, decision_log, activity, opportunity  # noqa: F401
+        from app.models import campaign_message, callback_event, dispatch_job  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
