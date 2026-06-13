@@ -48,7 +48,24 @@ export interface Segment {
   revenue_contribution: number;
   engagement_rate: number;
   growth_trend: number;
+  rule_type?: string | null;
   created_at: string;
+}
+
+export interface SegmentMemberPreview {
+  id: string;
+  name: string;
+  lifetime_value: number;
+  order_count: number;
+  last_purchase_days: number;
+  risk_level: string;
+  why_included: string;
+  signal_badge: string;
+}
+
+export interface SegmentMemberResponse {
+  total_members: number;
+  preview_members: SegmentMemberPreview[];
 }
 
 export interface Campaign {

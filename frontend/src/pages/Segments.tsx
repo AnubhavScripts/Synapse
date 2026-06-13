@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, IndianRupee, TrendingUp, Sparkles, Search, Send, X } from 'lucide-react';
-import { getSegments, buildSegment } from '../api/client';
-import type { Segment } from '../types';
+import { getSegments, buildSegment, getSegmentMembers } from '../api/client';
+import type { Segment, SegmentMemberResponse } from '../types';
 
 // ── Type descriptions (why each prebuilt segment exists) ─────────────────
 
@@ -74,6 +74,21 @@ export default function SegmentsPage() {
   });
 
   useEffect(() => { document.title = 'ReachIQ — Segments'; }, []);
+
+  const [membersData, setMembersData] = useState<SegmentMemberResponse | null>(null);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  useEffect(() => {
+    if (!selectedSegment) {
+      setMembersData(null);
+      return;
+    }
+    setLoadingMembers(true);
+    getSegmentMembers(selectedSegment.id)
+      .then(res => setMembersData(res))
+      .catch(err => console.error("Failed to load segment members", err))
+      .finally(() => setLoadingMembers(false));
+  }, [selectedSegment]);
 
   async function handleBuild() {
     if (!query.trim()) return;
@@ -296,6 +311,80 @@ export default function SegmentsPage() {
                   </p>
                 </div>
               )}
+
+              {/* Audience Preview Section */}
+              <div style={{ marginBottom: 24, borderTop: '1px solid var(--color-gray-100)', paddingTop: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-gray-400)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+                    Audience Preview
+                  </h3>
+                </div>
+
+                {loadingMembers ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} className="skeleton" style={{ height: 110, borderRadius: 8 }} />
+                    ))}
+                  </div>
+                ) : !membersData || membersData.preview_members.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--color-gray-400)', fontStyle: 'italic', padding: 8 }}>
+                    No audience members found in this segment.
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 12, color: 'var(--color-gray-400)', marginTop: -6, marginBottom: 14 }}>
+                      Showing up to 10 customers from this segment
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                      {membersData.preview_members.map(member => (
+                        <div key={member.id} className="card card-sm" style={{ padding: 12, background: 'var(--color-gray-50)', position: 'relative', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          
+                          {/* Behavioral Signal Badge */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--color-gray-900)' }}>
+                              {member.name}
+                            </div>
+                            <span className="badge badge-info" style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+                              {member.signal_badge}
+                            </span>
+                          </div>
+
+                          {/* Stats Row */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11, color: 'var(--color-gray-500)', borderTop: '1px solid var(--color-gray-200)', paddingTop: 6 }}>
+                            <div>
+                              <span style={{ fontWeight: 500 }}>LTV:</span> <strong style={{ color: 'var(--color-gray-800)' }}>{formatCurrency(member.lifetime_value)}</strong>
+                            </div>
+                            <div>
+                              <span style={{ fontWeight: 500 }}>Orders:</span> <strong style={{ color: 'var(--color-gray-800)' }}>{member.order_count}</strong>
+                            </div>
+                            <div>
+                              <span style={{ fontWeight: 500 }}>Inactive:</span> <strong style={{ color: 'var(--color-gray-800)' }}>{member.last_purchase_days}d</strong>
+                            </div>
+                            <div>
+                              <span style={{ fontWeight: 500 }}>Risk:</span> <span className={`badge badge-${member.risk_level === 'loyal' ? 'success' : member.risk_level === 'dormant' || member.risk_level === 'churned' ? 'error' : 'warning'}`} style={{ fontSize: 9, padding: '1px 4px', textTransform: 'capitalize' }}>{member.risk_level}</span>
+                            </div>
+                          </div>
+
+                          {/* Why Included */}
+                          <div style={{ fontSize: 11, fontStyle: 'italic', color: 'var(--color-gray-400)', marginTop: 4 }}>
+                            <strong>Why Included:</strong> {member.why_included}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Preview counts footer */}
+                    <div style={{ fontSize: 12, color: 'var(--color-gray-400)', textAlign: 'center', marginBottom: 20 }}>
+                      Showing {membersData.preview_members.length} of {membersData.total_members} customers
+                      {membersData.total_members > membersData.preview_members.length && (
+                        <div style={{ fontWeight: 600, color: 'var(--color-primary-600)', marginTop: 4 }}>
+                          + {membersData.total_members - membersData.preview_members.length} more customers in this segment
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
 
               <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => setSelectedSegment(null)}>
                 Close

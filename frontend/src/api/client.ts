@@ -3,6 +3,7 @@ import type {
   CustomerListResponse, Customer, Segment, Campaign, CampaignFunnel,
   DecisionLog, Activity, Opportunity, AnalyticsOverview, ChannelPerformance,
   StrategyResponse, OpportunityInvestigationResponse, CampaignMessage, CampaignTimelineEvent,
+  SegmentMemberResponse,
 } from '../types';
 
 const api = axios.create({
@@ -23,6 +24,9 @@ export const getCustomerDecisions = (id: string) =>
 // Segments
 export const getSegments = () =>
   api.get<Segment[]>('/segments').then(r => r.data);
+
+export const getSegmentMembers = (segmentId: string) =>
+  api.get<SegmentMemberResponse>(`/segments/${segmentId}/members`).then(r => r.data);
 
 export const buildSegment = (query: string) =>
   api.post('/segments/build', { query }).then(r => r.data);

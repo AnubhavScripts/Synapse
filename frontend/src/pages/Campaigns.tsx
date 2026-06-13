@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { getCampaigns, getCampaign, getCampaignFunnel, getCampaignTimeline, getCampaignDecisions, launchCampaign, getCampaignMessages } from '../api/client';
 import { LoadingButton } from '../components/ui/LoadingButton';
-import type { Campaign, CampaignFunnel, Activity, DecisionLog, CampaignMessage, CampaignTimelineEvent } from '../types';
+import type { Campaign, CampaignFunnel, DecisionLog, CampaignMessage, CampaignTimelineEvent } from '../types';
 
 function formatCurrency(n: number): string {
   if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
@@ -95,6 +95,14 @@ export default function CampaignsPage() {
     }
   }
 
+  const sortedCampaigns = campaigns
+    ? [...campaigns].sort((a, b) => {
+        const dateA = new Date(a.launched_at || a.created_at).getTime();
+        const dateB = new Date(b.launched_at || b.created_at).getTime();
+        return dateB - dateA;
+      })
+    : [];
+
   return (
     <div className="page-container">
       <div className="page-header">
@@ -125,7 +133,7 @@ export default function CampaignsPage() {
             </tr>
           </thead>
           <tbody>
-            {campaigns?.map(c => (
+            {sortedCampaigns.map(c => (
               <tr key={c.id} onClick={() => openCampaign(c)}>
                 <td>
                   <div style={{ fontWeight: 600 }}>{c.name}</div>
@@ -134,8 +142,11 @@ export default function CampaignsPage() {
                 <td>{c.segment_name || '—'}</td>
                 <td><span className={`badge badge-${c.channel}`}>{c.channel}</span></td>
                 <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)', whiteSpace: 'nowrap' }}>
-                  <div>{formatDate(c.created_at)}</div>
-                  {c.launched_at && <div style={{ color: 'var(--color-primary-500)' }}>↗ {formatDate(c.launched_at)}</div>}
+                  {c.launched_at ? (
+                    <div>{formatDate(c.launched_at)}</div>
+                  ) : (
+                    <div style={{ color: 'var(--color-gray-300)' }}>—</div>
+                  )}
                 </td>
                 <td><span className={`badge badge-${statusColors[c.status] || 'gray'}`}>{c.status}</span></td>
                 <td>{c.actual_sent.toLocaleString()}</td>
@@ -150,6 +161,16 @@ export default function CampaignsPage() {
                       onClick={() => handleLaunch(c.id)}
                     >
                       Launch
+                    </LoadingButton>
+                  )}
+                  {c.status === 'completed' && (
+                    <LoadingButton
+                      loading={launchingIds.has(c.id)}
+                      loadingText="Relaunching"
+                      size="sm"
+                      onClick={() => handleLaunch(c.id)}
+                    >
+                      Relaunch
                     </LoadingButton>
                   )}
                 </td>

@@ -34,11 +34,7 @@ const OPP_TYPE_LABELS: Record<string, { icon: string; label: string; color: stri
   upsell: { icon: '📈', label: 'Upsell Window', color: '#06b6d4' },
 };
 
-function priorityColor(score: number): string {
-  if (score >= 80) return '#ef4444';
-  if (score >= 60) return '#f59e0b';
-  return '#10b981';
-}
+
 
 function formatRevenue(n: number): string {
   if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
@@ -186,9 +182,6 @@ export default function OpportunityCenter() {
                         }}>{meta.label}</div>
                         <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>{opp.title}</h3>
                       </div>
-                    </div>
-                    <div className="priority-ring" style={{ '--ring-color': priorityColor(opp.priority_score ?? 50) } as React.CSSProperties}>
-                      <span>{opp.priority_score ?? 50}</span>
                     </div>
                   </div>
 

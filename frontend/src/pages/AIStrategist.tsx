@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Sparkles } from 'lucide-react';
 import {
-  investigateOpportunity, analyzeGoal,
+  investigateOpportunity, analyzeGoal, createCampaign, launchCampaign, getSegments,
 } from '../api/client';
 import { LoadingButton } from '../components/ui/LoadingButton';
 import type { OpportunityInvestigationResponse, StrategyResponse } from '../types';
@@ -57,6 +57,7 @@ export default function AIStrategist() {
   const oppId = searchParams.get('opp');
   const [investigation, setInvestigation] = useState<OpportunityInvestigationResponse | null>(null);
   const [loadingInvestigation, setLoadingInvestigation] = useState(false);
+  const [launchingCampaign, setLaunchingCampaign] = useState(false);
 
   useEffect(() => { document.title = 'ReachIQ — AI Strategist'; }, []);
 
@@ -83,6 +84,77 @@ export default function AIStrategist() {
       setGoal(urlGoal);
     }
   }, [searchParams, oppId]);
+
+  async function handleLaunch(strat: StrategyResponse) {
+    setLaunchingCampaign(true);
+    try {
+      const segments = await getSegments();
+      let matchedSegment = segments.find(s => {
+        const sName = s.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const stratName = strat.audience.segment_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return sName === stratName || sName.includes(stratName) || stratName.includes(sName);
+      });
+
+      if (!matchedSegment) {
+        const stratNameLower = strat.audience.segment_name.toLowerCase();
+        if (stratNameLower.includes('vip')) {
+          matchedSegment = segments.find(s => s.name.toLowerCase().includes('vip'));
+        } else if (stratNameLower.includes('dormant') || stratNameLower.includes('inactive')) {
+          matchedSegment = segments.find(s => s.name.toLowerCase().includes('dormant'));
+        } else if (stratNameLower.includes('frequent') || stratNameLower.includes('buyer') || stratNameLower.includes('repeat')) {
+          matchedSegment = segments.find(s => s.name.toLowerCase().includes('frequent'));
+        } else if (stratNameLower.includes('new') || stratNameLower.includes('recent')) {
+          matchedSegment = segments.find(s => s.name.toLowerCase().includes('new'));
+        } else if (stratNameLower.includes('risk') || stratNameLower.includes('churn')) {
+          matchedSegment = segments.find(s => s.name.toLowerCase().includes('risk'));
+        } else if (stratNameLower.includes('high value') || stratNameLower.includes('value')) {
+          matchedSegment = segments.find(s => s.name.toLowerCase().includes('high value') || s.name.toLowerCase().includes('value'));
+        } else if (stratNameLower.includes('discount') || stratNameLower.includes('promo') || stratNameLower.includes('sensitive') || stratNameLower.includes('coupon')) {
+          matchedSegment = segments.find(s => s.name.toLowerCase().includes('discount') || s.name.toLowerCase().includes('driven'));
+        }
+      }
+      const segmentId = matchedSegment ? matchedSegment.id : null;
+
+      const campaign = await createCampaign({
+        name: strat.goal_summary,
+        goal: strat.strategy.approach,
+        segment_id: segmentId,
+        channel: strat.channel.primary_channel,
+        message_headline: strat.message.headline,
+        message_body: strat.message.body,
+        message_cta: strat.message.cta,
+        ai_strategy: {
+          type: 'automated',
+          confidence: strat.strategy.confidence_score
+        },
+        predicted_reach: strat.performance.estimated_reach,
+        predicted_opens: strat.performance.estimated_opens,
+        predicted_clicks: strat.performance.estimated_clicks,
+        predicted_conversions: strat.performance.estimated_conversions,
+        predicted_revenue: strat.performance.estimated_revenue
+      });
+
+      await launchCampaign(campaign.id);
+      navigate('/campaigns');
+    } catch (e) {
+      console.error('Failed to create or launch campaign:', e);
+    } finally {
+      setLaunchingCampaign(false);
+    }
+  }
+
+  async function handleLaunchFromInvestigation(recommended_goal: string) {
+    setLaunchingCampaign(true);
+    setStrategyError('');
+    try {
+      const strat = await analyzeGoal(recommended_goal);
+      await handleLaunch(strat);
+    } catch (e) {
+      console.error('Failed to launch campaign from investigation:', e);
+      setStrategyError('Failed to generate or launch campaign from recommendation.');
+      setLaunchingCampaign(false);
+    }
+  }
 
   async function handleAnalyze(e?: React.FormEvent) {
     e?.preventDefault();
@@ -225,9 +297,15 @@ export default function AIStrategist() {
               <div className="strategy-message__cta">{strategy.message.cta}</div>
             </div>
 
-            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => navigate('/campaigns')}>
+            <LoadingButton
+              className="btn btn-primary"
+              style={{ marginTop: 16, width: '100%' }}
+              loading={launchingCampaign}
+              loadingText="Launching Campaign..."
+              onClick={() => handleLaunch(strategy)}
+            >
               🚀 Launch Campaign
-            </button>
+            </LoadingButton>
           </motion.div>
         )}
       </AnimatePresence>
@@ -364,9 +442,15 @@ export default function AIStrategist() {
                             {investigation.selection_reasoning}
                           </p>
                           <div style={{ display: 'flex', gap: 10 }}>
-                            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => navigate('/campaigns')}>
+                            <LoadingButton
+                              className="btn btn-primary"
+                              style={{ flex: 1 }}
+                              loading={launchingCampaign}
+                              loadingText="Launching..."
+                              onClick={() => handleLaunchFromInvestigation(investigation.recommended_goal)}
+                            >
                               🚀 Launch Campaign
-                            </button>
+                            </LoadingButton>
                             <button
                               className="btn btn-secondary"
                               style={{ flex: 1 }}
