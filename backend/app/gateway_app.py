@@ -37,9 +37,16 @@ BATCH_SIZE = 10             # Requirement #4
 GATEWAY_TIMEOUT = 5.0       # seconds per CRM callback attempt
 
 # ── Concurrency limiter (Requirement #5) ──────────────────────────────────────
-# Caps concurrent in-flight message journeys at 5, regardless of batch size.
+# Caps concurrent in-flight message journeys at 10, regardless of batch size.
 # Prevents overwhelming the CRM callback endpoint under high volume.
-_sem = asyncio.Semaphore(5)
+_sem = asyncio.Semaphore(10)
+
+
+# ── Global Shared HTTP Client State ──────────────────────────────────────────
+class GatewayState:
+    client: httpx.AsyncClient | None = None
+
+state = GatewayState()
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -50,7 +57,10 @@ async def lifespan(app: FastAPI):
         from app.models import dispatch_job  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
     logger.info("[Gateway] Messaging Gateway started on port 8001")
+    state.client = httpx.AsyncClient(timeout=GATEWAY_TIMEOUT)
     yield
+    if state.client:
+        await state.client.aclose()
     logger.info("[Gateway] Messaging Gateway shutting down")
 
 
@@ -307,15 +317,18 @@ async def _fire_with_retry(payload: dict) -> bool:
     """
     for attempt in range(MAX_HTTP_RETRY):
         try:
-            async with httpx.AsyncClient(timeout=GATEWAY_TIMEOUT) as client:
-                r = await client.post(CRM_CALLBACK_URL, json=payload)
-                if r.status_code < 500:
-                    # 2xx = processed, 4xx (e.g. 409 duplicate) = already handled
-                    return True
-                logger.warning(
-                    "[Gateway] CRM returned %d for callback %s (attempt %d/%d)",
-                    r.status_code, payload["callback_id"], attempt + 1, MAX_HTTP_RETRY,
-                )
+            if state.client:
+                r = await state.client.post(CRM_CALLBACK_URL, json=payload)
+            else:
+                async with httpx.AsyncClient(timeout=GATEWAY_TIMEOUT) as client:
+                    r = await client.post(CRM_CALLBACK_URL, json=payload)
+            if r.status_code < 500:
+                # 2xx = processed, 4xx (e.g. 409 duplicate) = already handled
+                return True
+            logger.warning(
+                "[Gateway] CRM returned %d for callback %s (attempt %d/%d)",
+                r.status_code, payload["callback_id"], attempt + 1, MAX_HTTP_RETRY,
+            )
         except Exception as exc:
             logger.warning(
                 "[Gateway] Callback HTTP error (attempt %d/%d): %s",

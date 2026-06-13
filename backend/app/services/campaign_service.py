@@ -41,8 +41,40 @@ async def launch_campaign(campaign_id: UUID, session: AsyncSession) -> Campaign:
     if not campaign:
         raise ValueError("Campaign not found")
 
+    # If the campaign has already been launched before (status is not draft or queued),
+    # clone it to create a new execution run instance, preserving the history of the previous one.
     if campaign.status not in ("draft", "queued"):
-        raise ValueError(f"Campaign cannot be launched from status: {campaign.status}")
+        cloned_campaign = Campaign(
+            id=uuid4(),
+            name=campaign.name,
+            goal=campaign.goal,
+            segment_id=campaign.segment_id,
+            channel=campaign.channel,
+            status="draft",
+            message_headline=campaign.message_headline,
+            message_body=campaign.message_body,
+            message_cta=campaign.message_cta,
+            ai_strategy=campaign.ai_strategy or {},
+            predicted_reach=campaign.predicted_reach,
+            predicted_opens=campaign.predicted_opens,
+            predicted_clicks=campaign.predicted_clicks,
+            predicted_conversions=campaign.predicted_conversions,
+            predicted_revenue=campaign.predicted_revenue,
+            created_at=datetime.now(timezone.utc),
+            launched_at=None,
+            completed_at=None,
+            actual_sent=0,
+            actual_delivered=0,
+            actual_read=0,
+            actual_clicked=0,
+            actual_converted=0,
+            actual_failed=0,
+            actual_revenue=0.0
+        )
+        session.add(cloned_campaign)
+        await session.flush()
+        campaign = cloned_campaign
+        campaign_id = cloned_campaign.id
 
     # ── 1. Identify Target Audience ───────────────────────────────────────────
     if campaign.segment_id:
@@ -56,7 +88,8 @@ async def launch_campaign(campaign_id: UUID, session: AsyncSession) -> Campaign:
         customer_ids = []
 
     if not customer_ids:
-        cust_res = await session.execute(select(Customer.id).limit(15))
+        limit_val = campaign.predicted_reach if (campaign.predicted_reach and campaign.predicted_reach > 0) else 15
+        cust_res = await session.execute(select(Customer.id).limit(limit_val))
         customer_ids = [row[0] for row in cust_res.all()]
 
     # ── 2. Pre-create CampaignMessage records ─────────────────────────────────

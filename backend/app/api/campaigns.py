@@ -19,7 +19,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,7 +45,7 @@ router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
 @router.get("", response_model=list[CampaignOut])
 async def list_campaigns(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Campaign).order_by(Campaign.created_at.desc())
+        select(Campaign).order_by(func.coalesce(Campaign.launched_at, Campaign.created_at).desc())
     )
     campaigns = result.scalars().all()
     out = []
@@ -139,7 +139,7 @@ async def get_timeline(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
         service="crm",
         event_type="campaign_created",
         title="Campaign Created",
-        description=f"Campaign '{campaign.name}' was created as a {campaign.status}.",
+        description=f"Campaign '{campaign.name}' was created as a draft.",
         status="success",
         metadata={"goal": campaign.goal, "channel": campaign.channel}
     ))

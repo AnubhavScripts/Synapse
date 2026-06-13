@@ -65,6 +65,7 @@ async def _process(event_id: uuid.UUID, db: AsyncSession) -> None:
 
         # ── Fix #4: Update campaign_messages on EVERY event ──────────────────
         # This ensures the message timeline in the UI reflects live progress.
+        old_status = msg.status
         msg.status = event.event_type
         msg.sequence = event.sequence_number
         history = list(msg.history or [])
@@ -82,7 +83,7 @@ async def _process(event_id: uuid.UUID, db: AsyncSession) -> None:
         # No full SELECT across all messages required. Each event fires one
         # targeted UPDATE that increments a single counter column.
         campaign_id = msg.campaign_id
-        _increment = _build_counter_increment(event.event_type, event.details)
+        _increment = _build_transition_increment(old_status, event.event_type, event.details)
         if _increment:
             await db.execute(
                 update(Campaign)
@@ -113,20 +114,45 @@ async def _process(event_id: uuid.UUID, db: AsyncSession) -> None:
                 await err_db.commit()
 
 
-def _build_counter_increment(event_type: str, details: dict) -> dict:
-    """Returns SQLAlchemy column arithmetic for the given event type."""
-    mapping = {
-        "sent":      {"actual_sent": Campaign.actual_sent + 1},
-        "delivered": {"actual_delivered": Campaign.actual_delivered + 1},
-        "read":      {"actual_read": Campaign.actual_read + 1},
-        "clicked":   {"actual_clicked": Campaign.actual_clicked + 1},
-        "failed":    {"actual_failed": Campaign.actual_failed + 1},
-        "converted": {
-            "actual_converted": Campaign.actual_converted + 1,
-            "actual_revenue": Campaign.actual_revenue + float(details.get("revenue", 0.0)),
-        },
-    }
-    return mapping.get(event_type, {})
+def _build_transition_increment(old_status: str, new_status: str, details: dict) -> dict:
+    """
+    Computes precise campaign counter increments/decrements based on message state transition
+    to guarantee that metrics never inflate and sent <= total messages.
+    """
+    increments = {}
+    
+    if old_status == new_status:
+        return increments
+
+    # 1. Sent
+    if new_status == "sent":
+        increments["actual_sent"] = Campaign.actual_sent + 1
+
+    # 2. Failed
+    elif new_status == "failed":
+        if old_status != "failed":
+            increments["actual_failed"] = Campaign.actual_failed + 1
+
+    # 3. Delivered
+    elif new_status == "delivered":
+        increments["actual_delivered"] = Campaign.actual_delivered + 1
+        if old_status == "failed":
+            increments["actual_failed"] = Campaign.actual_failed - 1
+
+    # 4. Read
+    elif new_status == "read":
+        increments["actual_read"] = Campaign.actual_read + 1
+
+    # 5. Clicked
+    elif new_status == "clicked":
+        increments["actual_clicked"] = Campaign.actual_clicked + 1
+
+    # 6. Converted
+    elif new_status == "converted":
+        increments["actual_converted"] = Campaign.actual_converted + 1
+        increments["actual_revenue"] = Campaign.actual_revenue + float(details.get("revenue", 0.0))
+
+    return increments
 
 
 async def _handle_terminal(
@@ -189,6 +215,16 @@ async def _check_campaign_completion(campaign_id: uuid.UUID, db: AsyncSession) -
     Uses a single COUNT query that splits total vs terminal in one pass —
     no Python-side iteration over all messages required.
     """
+    # Lock the Campaign row first to serialize completion checks and avoid race conditions under concurrency
+    campaign_res = await db.execute(
+        select(Campaign)
+        .where(Campaign.id == campaign_id)
+        .with_for_update()
+    )
+    campaign = campaign_res.scalar_one_or_none()
+    if not campaign or campaign.status != "sending":
+        return
+
     res = await db.execute(
         select(
             func.count().label("total"),
@@ -201,10 +237,6 @@ async def _check_campaign_completion(campaign_id: uuid.UUID, db: AsyncSession) -
     )
     row = res.one()
     if row.total == 0 or row.total != row.terminal:
-        return
-
-    campaign = await db.get(Campaign, campaign_id)
-    if not campaign or campaign.status != "sending":
         return
 
     campaign.status = "completed"

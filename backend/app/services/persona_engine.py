@@ -114,7 +114,7 @@ def compute_channel_affinity(customer: Customer) -> tuple[str, dict]:
 
     # Clamp scores
     scores = {k: round(min(v, 0.98), 2) for k, v in scores.items()}
-    best_channel = max(scores, key=scores.get)
+    best_channel = max(scores, key=lambda k: scores[k])
     return best_channel, scores
 
 

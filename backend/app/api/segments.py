@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.models.segment import Segment, SegmentMembership
 from app.models.customer import Customer
 from app.models.persona import CustomerPersona
-from app.schemas.segment import SegmentOut, SegmentBuildRequest, SegmentBuildResponse
+from app.schemas.segment import SegmentOut, SegmentBuildRequest, SegmentBuildResponse, SegmentMemberResponse, SegmentMemberPreview
 from app.schemas.customer import CustomerOut
 from uuid import UUID
 from sqlalchemy import func
@@ -39,6 +39,117 @@ async def get_segment_customers(segment_id: UUID, db: AsyncSession = Depends(get
     )
     customers = result.scalars().all()
     return [CustomerOut.model_validate(c) for c in customers]
+
+
+@router.get("/{segment_id}/members", response_model=SegmentMemberResponse)
+async def get_segment_members_preview(segment_id: UUID, db: AsyncSession = Depends(get_db)):
+    # 1. Fetch the segment to determine its rule_type
+    segment = await db.get(Segment, segment_id)
+    if not segment:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    # 2. Count total members
+    total_count_res = await db.execute(
+        select(func.count(SegmentMembership.customer_id))
+        .where(SegmentMembership.segment_id == segment_id)
+    )
+    total_members = total_count_res.scalar() or 0
+
+    # 3. Determine sorting based on rule_type
+    query = select(Customer, CustomerPersona).join(
+        SegmentMembership, SegmentMembership.customer_id == Customer.id
+    ).outerjoin(
+        CustomerPersona, CustomerPersona.customer_id == Customer.id
+    ).where(
+        SegmentMembership.segment_id == segment_id
+    )
+
+    rule_type = segment.rule_type
+    if rule_type in ("vip", "high_value"):
+        query = query.order_by(Customer.lifetime_value.desc())
+    elif rule_type == "frequent":
+        query = query.order_by(Customer.order_count.desc())
+    elif rule_type == "new":
+        query = query.order_by(Customer.created_at.desc())
+    elif rule_type in ("at_risk", "dormant"):
+        query = query.order_by(Customer.last_purchase_date.asc())
+    elif rule_type == "discount":
+        query = query.order_by(CustomerPersona.discount_response_rate.desc())
+    else:
+        # Fallback sort
+        query = query.order_by(Customer.lifetime_value.desc())
+
+    # Limit to 10
+    query = query.limit(10)
+    result = await db.execute(query)
+    rows = result.all()
+
+    # 4. Map to SegmentMemberPreview schemas
+    from datetime import datetime, timezone
+    now_utc = datetime.now(timezone.utc)
+    preview_members = []
+
+    for customer, persona in rows:
+        # Calculate last purchase days
+        last_purchase_days = 0
+        if customer.last_purchase_date:
+            delta = now_utc - customer.last_purchase_date
+            last_purchase_days = max(delta.days, 0)
+
+        # Dynamic explanations and badges based on rule_type
+        why_included = "Matches segment criteria."
+        signal_badge = "AUDIENCE MEMBER"
+
+        # Safe formatting of currency for dynamic descriptions
+        ltv_formatted = f"₹{customer.lifetime_value:,.0f}"
+
+        if rule_type == "vip":
+            signal_badge = "TOP 5% SPENDER"
+            why_included = f"In top spending cohort (LTV: {ltv_formatted})"
+        elif rule_type == "high_value":
+            signal_badge = "HIGH VALUE COHORT"
+            why_included = f"High-tier spending customer (LTV: {ltv_formatted})"
+        elif rule_type == "frequent":
+            signal_badge = "HIGH FREQUENCY"
+            why_included = f"Highly active buyer with {customer.order_count} lifetime orders"
+        elif rule_type == "new":
+            joined_delta = now_utc - customer.created_at
+            joined_days = max(joined_delta.days, 0)
+            signal_badge = "NEWLY ACQUIRED"
+            why_included = f"Recently acquired customer (joined {joined_days} days ago)"
+        elif rule_type == "at_risk":
+            signal_badge = f"{last_purchase_days} DAYS INACTIVE"
+            why_included = f"No purchase activity for {last_purchase_days} days (showing early churn signals)"
+        elif rule_type == "dormant":
+            signal_badge = f"{last_purchase_days} DAYS INACTIVE"
+            why_included = f"No purchase activity for {last_purchase_days} days (requires win-back effort)"
+        elif rule_type == "discount" and persona:
+            rate = int(persona.discount_response_rate * 100)
+            signal_badge = f"{rate}% DISCOUNT AFFINITY"
+            why_included = f"High promotional coupon response rate ({rate}%)"
+        else:
+            cat = persona.primary_category if persona else "General"
+            signal_badge = "AUDIENCE MEMBER"
+            why_included = f"Matches persona category: {cat}"
+
+        preview_members.append(
+            SegmentMemberPreview(
+                id=str(customer.id),
+                name=customer.name,
+                lifetime_value=customer.lifetime_value,
+                order_count=customer.order_count,
+                last_purchase_days=last_purchase_days,
+                risk_level=persona.risk_level if persona else "stable",
+                why_included=why_included,
+                signal_badge=signal_badge
+            )
+        )
+
+    return SegmentMemberResponse(
+        total_members=total_members,
+        preview_members=preview_members
+    )
 
 
 @router.post("/build", response_model=SegmentBuildResponse)

@@ -86,7 +86,7 @@ CANDIDATE_ACTIONS = {
     "upsell": [
         {
             "name": "Category Upsell Bundle",
-            "channel": "email",
+            "channel": "whatsapp",
             "effort": "Medium",
             "base_conversion": 0.11,
             "margin_impact": "High",
@@ -95,7 +95,7 @@ CANDIDATE_ACTIONS = {
         },
         {
             "name": "Premium Membership Trial",
-            "channel": "whatsapp",
+            "channel": "email",
             "effort": "High",
             "base_conversion": 0.065,
             "margin_impact": "High",
@@ -233,7 +233,7 @@ def compute_priority_score(
     urgency_score = min(urgency_factor, 1.5) / 1.5 * 20
     ltv_score = min(avg_ltv / 10000, 1.0) * 15
     raw = rev_score + cust_score + urgency_score + ltv_score
-    return min(int(math.ceil(raw)), 100)
+    return min(math.ceil(raw), 100)
 
 
 # ---------------------------------------------------------------------------
