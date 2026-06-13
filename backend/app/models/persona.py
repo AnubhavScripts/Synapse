@@ -4,6 +4,10 @@ from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, func, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.customer import Customer
 
 
 class CustomerPersona(Base):

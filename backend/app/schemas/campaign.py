@@ -38,7 +38,7 @@ class CampaignOut(BaseModel):
 class CampaignCreateRequest(BaseModel):
     name: str
     goal: str
-    segment_id: UUID
+    segment_id: Optional[UUID] = None
     channel: str
     message_headline: str
     message_body: str

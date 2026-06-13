@@ -4,6 +4,11 @@ from sqlalchemy import String, Float, Integer, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.persona import CustomerPersona
+    from app.models.decision_log import DecisionLog
 
 
 class Customer(Base):
