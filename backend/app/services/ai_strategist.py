@@ -42,9 +42,10 @@ def _pydantic_to_gemini_schema(model) -> dict:
                 ref_name = ref_path.split("/")[-1]
                 if ref_name in defs:
                     resolved = resolve_refs(dict(defs[ref_name]))
-                    node_copy = {k: v for k, v in node.items() if k != "$ref"}
-                    resolved.update(node_copy)
-                    return resolved
+                    if isinstance(resolved, dict):
+                        node_copy = {k: v for k, v in node.items() if k != "$ref"}
+                        resolved.update(node_copy)
+                        return resolved
             
             resolved_node = {}
             for k, v in node.items():
@@ -200,7 +201,11 @@ RECENT CAMPAIGN PERFORMANCE:
 
 BUSINESS GOAL: "{goal}"
 
-Based on this data, create a comprehensive marketing strategy. Use actual numbers from the data above. Be specific about WHY you recommend each decision. All monetary values should be in Indian Rupees (₹)."""
+Based on this data, create a comprehensive marketing strategy. Use actual numbers from the data above. Be specific about WHY you recommend each decision. All monetary values should be in Indian Rupees (₹).
+
+CRITICAL MESSAGE FORMATTING RULES:
+1. In `goal_summary`, return a short, punchy 3-5 word campaign name (e.g. "Accessory Bundle Promotion" or "Dormant Win-Back Offer"). Do NOT include the word "Objective:" or repeat the long target customer criteria.
+2. In `strategy.approach`, describe the strategic approach of the campaign (e.g. "Create a targeted promotion combining discount + complementary product recommendation")."""
 
         response = client.models.generate_content(
             model="gemini-2.5-flash",
@@ -211,6 +216,8 @@ Based on this data, create a comprehensive marketing strategy. Use actual number
             },
         )
 
+        if not response.text:
+            raise ValueError("Empty response from Gemini API")
         return StrategyResponse.model_validate_json(response.text)
 
 
@@ -227,28 +234,46 @@ async def _fallback_strategy(goal: str, context: dict, session: AsyncSession) ->
     # Determine best audience based on goal
     if any(w in goal_lower for w in ["dormant", "back", "inactive", "win-back", "return", "reactivate"]):
         segment_name = "Dormant Customers"
-        count = context["risk_distribution"].get("dormant", 0)
-        revenue_opp = context["dormant_recoverable_revenue"]
+        seg = next((s for s in context["segments"] if s["name"] == "Dormant Customers"), None)
+        count = seg["count"] if seg else context["risk_distribution"].get("dormant", 0)
+        revenue_opp = seg["revenue"] if seg else context["dormant_recoverable_revenue"]
         campaign_type = "Win-Back"
         characteristics = ["Haven't purchased in 75+ days", "Previously active buyers", "High historical LTV"]
     elif any(w in goal_lower for w in ["loyal", "vip", "reward", "retain", "loyalty"]):
         segment_name = "VIP Customers"
-        count = context["risk_distribution"].get("loyal", 0)
-        revenue_opp = context["avg_ltv"] * count * 0.15
+        seg = next((s for s in context["segments"] if s["name"] == "VIP Customers"), None)
+        count = seg["count"] if seg else context["risk_distribution"].get("loyal", 0)
+        revenue_opp = seg["revenue"] if seg else context["avg_ltv"] * count * 0.15
         campaign_type = "Loyalty Reward"
         characteristics = ["High engagement score", "Frequent purchasers", "Strong brand affinity"]
-    elif any(w in goal_lower for w in ["repeat", "purchase", "frequency", "buy again"]):
-        segment_name = "Stable Customers"
-        count = context["risk_distribution"].get("stable", 0)
-        revenue_opp = context["avg_ltv"] * count * 0.2
-        campaign_type = "Repeat Purchase"
-        characteristics = ["Active buyers", "Moderate purchase frequency", "Growth potential"]
-    elif any(w in goal_lower for w in ["new", "launch", "product", "collection", "promote"]):
-        segment_name = "Engaged Customers"
-        count = context["risk_distribution"].get("loyal", 0) + context["risk_distribution"].get("stable", 0)
-        revenue_opp = count * 1500
+    elif any(w in goal_lower for w in ["cross sell", "cross-sell", "discount", "bundle", "accessory", "promo"]):
+        segment_name = "Discount Driven"
+        seg = next((s for s in context["segments"] if s["name"] == "Discount Driven"), None)
+        count = seg["count"] if seg else 10
+        revenue_opp = seg["revenue"] if seg else count * 1500
+        campaign_type = "Cross-Sell"
+        characteristics = ["High discount sensitivity", "Complementary product needs", "Responsive to offers"]
+    elif any(w in goal_lower for w in ["churn", "prevent", "risk", "at risk", "at-risk", "retention"]):
+        segment_name = "At Risk Customers"
+        seg = next((s for s in context["segments"] if s["name"] == "At Risk Customers"), None)
+        count = seg["count"] if seg else context["risk_distribution"].get("at_risk", 0)
+        revenue_opp = seg["revenue"] if seg else count * 2000
+        campaign_type = "Retention"
+        characteristics = ["Declining engagement scores", "Increased time between purchases", "Churn risk signal"]
+    elif any(w in goal_lower for w in ["channel", "mismatch", "preferred", "upsell", "frequency", "categories", "bought together"]):
+        segment_name = "Frequent Buyers"
+        seg = next((s for s in context["segments"] if s["name"] == "Frequent Buyers"), None)
+        count = seg["count"] if seg else 30
+        revenue_opp = seg["revenue"] if seg else count * 2500
+        campaign_type = "Upsell"
+        characteristics = ["Highly frequent purchasers", "Multi-channel preferences", "Open to bundle upgrades"]
+    elif any(w in goal_lower for w in ["new", "launch", "product", "collection", "promote", "emerging"]):
+        segment_name = "New Customers"
+        seg = next((s for s in context["segments"] if s["name"] == "New Customers"), None)
+        count = seg["count"] if seg else context["risk_distribution"].get("new", 0)
+        revenue_opp = seg["revenue"] if seg else count * 1500
         campaign_type = "Product Launch"
-        characteristics = ["Active engagement", "Category match potential", "High read rates"]
+        characteristics = ["Recently acquired", "Low order counts", "High initial engagement"]
     else:
         segment_name = "All Active Customers"
         count = context["total_customers"] - context["risk_distribution"].get("churned", 0)
@@ -270,8 +295,20 @@ async def _fallback_strategy(goal: str, context: dict, session: AsyncSession) ->
     headline_text = "Come Back to Us!" if "dormant" in goal_lower else "Something Special for You"
     body_suffix = "We miss you! Here's an exclusive offer just for you." if "dormant" in goal_lower else "Check out our latest picks curated just for you."
 
+    # Concise summary of the goal
+    short_goal = goal
+    if "targeting" in goal_lower:
+        parts = goal.split("targeting")
+        if parts:
+            short_goal = parts[0].strip()
+            if short_goal.lower().startswith("run a "):
+                short_goal = short_goal[6:]
+            elif short_goal.lower().startswith("run "):
+                short_goal = short_goal[4:]
+            short_goal = short_goal.strip().capitalize()
+
     return StrategyResponse(
-        goal_summary=f"Objective: {goal}. Targeting {segment_name.lower()} to drive {campaign_type.lower()} outcomes through personalized engagement on their preferred channels.",
+        goal_summary=short_goal,
         audience=AudienceRecommendation(
             segment_name=segment_name,
             customer_count=count,

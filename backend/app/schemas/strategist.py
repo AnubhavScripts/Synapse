@@ -47,7 +47,7 @@ class PerformancePrediction(BaseModel):
 
 
 class StrategyResponse(BaseModel):
-    goal_summary: str = Field(description="AI summary of the business objective")
+    goal_summary: str = Field(description="Short, punchy campaign title, 3-5 words max (e.g. 'Accessory Bundle Offer')")
     audience: AudienceRecommendation
     strategy: StrategyRecommendation
     channel: ChannelRecommendation

@@ -61,8 +61,8 @@ async def seed():
         # ── CUSTOMERS ──────────────────────────────────────
         customers = []
         used_emails = set()
-        for i in range(100):
-            first = FIRST_NAMES[i]
+        for i in range(250):
+            first = FIRST_NAMES[i % len(FIRST_NAMES)]
             last = random.choice(LAST_NAMES)
             name = f"{first} {last}"
 
@@ -73,7 +73,7 @@ async def seed():
             used_emails.add(email)
 
             # Generate varied purchase patterns
-            pattern = random.choice(["vip", "active", "moderate", "light", "dormant", "new", "churned"])
+            pattern = random.choice(["vip", "active", "moderate", "light", "dormant", "new", "churned", "discount"])
 
             if pattern == "vip":
                 order_count = random.randint(15, 40)
@@ -105,6 +105,13 @@ async def seed():
                 total_spend = random.uniform(500, 5000)
                 last_purchase = random_date(20, 0)
                 created = random_date(30, 0)
+            elif pattern == "discount":
+                # High order count of low-value items (AOV < 500)
+                order_count = random.randint(12, 28)
+                # Keep total spend low enough relative to order count so AOV < 500
+                total_spend = order_count * random.uniform(150, 450)
+                last_purchase = random_date(45, 5)
+                created = random_date(300, 60)
             else:  # churned
                 order_count = random.randint(2, 8)
                 total_spend = random.uniform(3000, 20000)
@@ -147,9 +154,9 @@ async def seed():
 
         # ── SEGMENTS ───────────────────────────────────────
         segment_defs = [
-            ("VIP Customers", "High-value, highly engaged customers with strong loyalty", "loyal", lambda p: p.engagement_score >= 75 and p.risk_level == "loyal"),
+            ("VIP Customers", "High-value, highly engaged customers with strong loyalty", "vip", lambda p: p.engagement_score >= 75 and p.risk_level == "loyal"),
             ("Dormant Customers", "Customers who haven't purchased in 75+ days", "dormant", lambda p: p.risk_level == "dormant"),
-            ("Frequent Buyers", "Customers with 10+ orders", "active", lambda p: p.engagement_score >= 60),
+            ("Frequent Buyers", "Customers with 10+ orders", "frequent", lambda p: p.engagement_score >= 60),
             ("New Customers", "Recently acquired customers within 30 days", "new", lambda p: p.risk_level in ("loyal", "stable") and p.engagement_score < 40),
             ("At Risk Customers", "Previously active customers showing declining engagement", "at_risk", lambda p: p.risk_level == "at_risk"),
             ("High Value", "Top 20% by lifetime value", "high_value", lambda p: p.engagement_score >= 70),
@@ -179,6 +186,7 @@ async def seed():
                 revenue_contribution=round(revenue, 2),
                 engagement_rate=round(engagement, 1),
                 growth_trend=round(random.uniform(-5, 15), 1),
+                rule_type=seg_key,
             )
             session.add(segment)
             await session.flush()
@@ -253,7 +261,8 @@ async def seed():
                 campaign.actual_converted = actual_converted
                 campaign.actual_failed = actual_failed
                 campaign.actual_revenue = actual_revenue
-                campaign.launched_at = campaign.created_at + timedelta(hours=random.randint(1, 24))
+                base_time = campaign.created_at or datetime.now(timezone.utc)
+                campaign.launched_at = base_time + timedelta(hours=random.randint(1, 24))
                 campaign.completed_at = campaign.launched_at + timedelta(hours=random.randint(2, 48))
 
             session.add(campaign)
