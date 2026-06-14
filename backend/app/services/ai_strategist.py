@@ -59,7 +59,9 @@ def _pydantic_to_gemini_schema(model) -> dict:
             
         return node
 
-    return resolve_refs(raw_schema)
+    result = resolve_refs(raw_schema)
+    assert isinstance(result, dict)
+    return result
 
 
 async def _gather_context(session: AsyncSession) -> dict:

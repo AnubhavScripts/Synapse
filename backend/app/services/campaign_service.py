@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import async_session
+from app.core.config import get_settings
 from app.models.campaign import Campaign
 from app.models.activity import Activity
 from app.models.segment import SegmentMembership
@@ -24,7 +25,8 @@ from app.models.customer import Customer
 
 logger = logging.getLogger(__name__)
 
-GATEWAY_DISPATCH_URL = "http://localhost:8001/gateway/dispatch"
+settings = get_settings()
+GATEWAY_DISPATCH_URL = settings.GATEWAY_DISPATCH_URL
 GATEWAY_TIMEOUT = 10.0   # seconds — generous to allow Gateway startup latency
 
 

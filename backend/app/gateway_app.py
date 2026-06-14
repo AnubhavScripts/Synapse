@@ -25,13 +25,15 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session, engine, Base
+from app.core.config import get_settings
 from app.models.dispatch_job import DispatchJob
 from app.services.channel_simulator import simulate_customer_journey
 
 logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-CRM_CALLBACK_URL = "http://localhost:8000/api/campaigns/callback"
+settings = get_settings()
+CRM_CALLBACK_URL = settings.CRM_CALLBACK_URL
 MAX_HTTP_RETRY = 3          # Fix #3 — explicit retry constant
 BATCH_SIZE = 10             # Requirement #4
 GATEWAY_TIMEOUT = 5.0       # seconds per CRM callback attempt

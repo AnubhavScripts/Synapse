@@ -262,8 +262,9 @@ async def seed():
                 campaign.actual_failed = actual_failed
                 campaign.actual_revenue = actual_revenue
                 base_time = campaign.created_at or datetime.now(timezone.utc)
-                campaign.launched_at = base_time + timedelta(hours=random.randint(1, 24))
-                campaign.completed_at = campaign.launched_at + timedelta(hours=random.randint(2, 48))
+                launched = base_time + timedelta(hours=random.randint(1, 24))
+                campaign.launched_at = launched
+                campaign.completed_at = launched + timedelta(hours=random.randint(2, 48))
 
             session.add(campaign)
             campaigns.append(campaign)
