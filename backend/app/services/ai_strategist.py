@@ -283,6 +283,28 @@ async def _fallback_strategy(goal: str, context: dict, session: AsyncSession) ->
         campaign_type = "General Engagement"
         characteristics = ["Broad audience", "Mixed engagement levels", "Multi-category interest"]
 
+    # Parse custom target customer count if specified in the text (e.g., "targeting 50 customers")
+    import re
+    count_match = re.search(r"targeting\s+(\d+)\s+customer", goal_lower)
+    if count_match:
+        count = int(count_match.group(1))
+
+    # Parse custom potential revenue if specified in the text (e.g., "recover ₹4.9L" or "recover 490000")
+    rev_match = re.search(r"(?:recover|revenue\s+of)\s+₹?([\d\.,]+)\s*([kKlL])?", goal_lower)
+    if rev_match:
+        try:
+            val_str = rev_match.group(1).replace(",", "")
+            val = float(val_str)
+            unit = rev_match.group(2)
+            if unit in ("l", "L"):
+                revenue_opp = val * 100000
+            elif unit in ("k", "K"):
+                revenue_opp = val * 1000
+            else:
+                revenue_opp = val
+        except ValueError:
+            pass
+
     # Best channel
     best_channel = None
     for ch in ["whatsapp", "email", "sms", "rcs"]:
@@ -315,6 +337,28 @@ async def _fallback_strategy(goal: str, context: dict, session: AsyncSession) ->
                 short_goal = short_goal[4:]
             short_goal = short_goal.strip().capitalize()
 
+    # Map campaign type to opportunity engine type
+    opp_type_map = {
+        "Win-Back": "dormant_recovery",
+        "Loyalty Reward": "loyalty",
+        "Cross-Sell": "cross_sell",
+        "Retention": "churn_prevention",
+        "Upsell": "upsell",
+        "Product Launch": "emerging_vip",
+    }
+    opp_type = opp_type_map.get(campaign_type, "dormant_recovery")
+    templates = get_candidate_actions(opp_type)
+    
+    # Try to find template by matching channel
+    matching_template = next((t for t in templates if t["channel"] == best_channel), None)
+    if matching_template:
+        conversion_rate = matching_template["base_conversion"]
+    else:
+        conversion_rate = ch_rates["conversion_rate"]
+
+    estimated_conversions = max(1, int(count * conversion_rate))
+    estimated_revenue = round(estimated_conversions * (revenue_opp / max(count, 1)) * 0.85, 2)
+
     return StrategyResponse(
         goal_summary=short_goal,
         audience=AudienceRecommendation(
@@ -328,7 +372,7 @@ async def _fallback_strategy(goal: str, context: dict, session: AsyncSession) ->
             campaign_type=campaign_type,
             approach=f"Personalized {campaign_type.lower()} campaign leveraging customer category affinity and discount sensitivity for maximum relevance.",
             confidence_score=0.82,
-            expected_outcome=f"Expected to recover {int(count * 0.15)} customers with ₹{revenue_opp * 0.15:,.0f} projected revenue.",
+            expected_outcome=f"Expected to recover {estimated_conversions} customers with ₹{estimated_revenue:,.0f} projected revenue.",
             reasoning=f"Based on historical persona data and {len(context.get('recent_campaigns', []))} recent campaign performance metrics."
         ),
         channel=ChannelRecommendation(
@@ -347,8 +391,8 @@ async def _fallback_strategy(goal: str, context: dict, session: AsyncSession) ->
             estimated_reach=count,
             estimated_opens=int(count * ch_rates["read_rate"]),
             estimated_clicks=int(count * ch_rates["click_rate"]),
-            estimated_conversions=int(count * ch_rates["conversion_rate"]),
-            estimated_revenue=round(revenue_opp * ch_rates["conversion_rate"], 2)
+            estimated_conversions=estimated_conversions,
+            estimated_revenue=estimated_revenue
         ),
         decision_reasoning=[
             f"Audience: Selected {segment_name} ({count} customers) based on risk_level and engagement_score analysis.",
