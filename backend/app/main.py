@@ -105,3 +105,15 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy", "service": "crm-api"}
+
+
+@app.get("/api/seed")
+@app.post("/api/seed")
+async def seed_database():
+    from app.seed import seed
+    try:
+        await seed()
+        return {"status": "success", "message": "Database seeded successfully"}
+    except Exception as e:
+        logger.exception("Seeding failed")
+        return {"status": "error", "message": str(e)}
