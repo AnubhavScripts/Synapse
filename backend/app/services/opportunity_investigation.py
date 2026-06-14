@@ -190,7 +190,7 @@ def _algorithmic_investigation(opportunity: Opportunity) -> OpportunityInvestiga
     )
 
     recommended_goal = (
-        f"Run a {best.name.lower()} campaign targeting {opportunity.affected_customers} "
+        f"Run a {best.name.lower()} campaign via {best_template['channel']} targeting {opportunity.affected_customers} "
         f"{opp_type.replace('_', ' ')} customers to recover ₹{opportunity.potential_revenue/100000:.1f}L in revenue."
     )
 
@@ -316,7 +316,7 @@ Be specific, use ₹ amounts, be concise and executive-level. Do not suggest new
             effort=ie["effort"],
             recommended_action=ie["action"],
             recommended_goal=(
-                f"Run a {options[recommended_index].name.lower()} campaign targeting "
+                f"Run a {options[recommended_index].name.lower()} campaign via {templates[recommended_index]['channel']} targeting "
                 f"{opportunity.affected_customers} customers to recover "
                 f"₹{opportunity.potential_revenue/100000:.1f}L in revenue."
             ),

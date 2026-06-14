@@ -284,7 +284,13 @@ async def _fallback_strategy(goal: str, context: dict, session: AsyncSession) ->
         characteristics = ["Broad audience", "Mixed engagement levels", "Multi-category interest"]
 
     # Best channel
-    best_channel = max(context["channel_distribution"], key=context["channel_distribution"].get)
+    best_channel = None
+    for ch in ["whatsapp", "email", "sms", "rcs"]:
+        if f"via {ch}" in goal_lower or f"using {ch}" in goal_lower:
+            best_channel = ch
+            break
+    if not best_channel:
+        best_channel = max(context["channel_distribution"], key=context["channel_distribution"].get)
     channel_metrics = {
         "whatsapp": {"read_rate": 0.78, "click_rate": 0.28, "conversion_rate": 0.12},
         "sms": {"read_rate": 0.45, "click_rate": 0.12, "conversion_rate": 0.05},
