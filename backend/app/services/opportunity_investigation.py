@@ -293,6 +293,9 @@ Be specific, use ₹ amounts, be concise and executive-level. Do not suggest new
             config={"response_mime_type": "application/json"},
         )
 
+        if not response.text:
+            raise ValueError("Empty response from Gemini API")
+
         import json
         enrichment = json.loads(response.text)
 
