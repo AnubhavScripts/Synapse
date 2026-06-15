@@ -86,6 +86,8 @@ async def launch_campaign(campaign_id: UUID, session: AsyncSession) -> Campaign:
             )
         )
         customer_ids = [row[0] for row in members_result.all()]
+        if campaign.predicted_reach and campaign.predicted_reach > 0:
+            customer_ids = customer_ids[:campaign.predicted_reach]
     else:
         customer_ids = []
 

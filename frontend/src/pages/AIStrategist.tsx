@@ -454,7 +454,13 @@ export default function AIStrategist() {
                             <button
                               className="btn btn-secondary"
                               style={{ flex: 1 }}
-                              onClick={() => setGoal(investigation.recommended_goal)}
+                              onClick={() => {
+                                setGoal(investigation.recommended_goal);
+                                setInvestigation(null);
+                                setTimeout(() => {
+                                  document.getElementById('goal-input')?.focus();
+                                }, 100);
+                              }}
                             >
                               ✏️ Customize Strategy
                             </button>
