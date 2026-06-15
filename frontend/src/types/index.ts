@@ -266,6 +266,7 @@ export interface OpportunityInvestigationResponse {
   recommended_action: string;  // "Launch immediately" | "Review manually" | "Schedule for off-peak"
 
   recommended_goal: string;    // Pre-fills the /analyze goal input
+  opportunity_customer_ids: string[];  // Exact UUIDs of affected customers — use when creating campaign
 }
 
 export interface CampaignMessageHistoryItem {

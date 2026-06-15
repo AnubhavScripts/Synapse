@@ -86,11 +86,20 @@ async def launch_campaign(campaign_id: UUID, session: AsyncSession) -> Campaign:
             )
         )
         customer_ids = [row[0] for row in members_result.all()]
-        if campaign.predicted_reach and campaign.predicted_reach > 0:
-            customer_ids = customer_ids[:campaign.predicted_reach]
     else:
         customer_ids = []
 
+    # Fix: if the campaign was launched from an opportunity investigation, the
+    # exact affected customer UUIDs are stored in ai_strategy['opportunity_customer_ids'].
+    # Use those directly so messages_sent == affected_customers, always.
+    if not customer_ids:
+        stored_ids = (campaign.ai_strategy or {}).get("opportunity_customer_ids", [])
+        if stored_ids:
+            from uuid import UUID as _UUID
+            customer_ids = [_UUID(cid) for cid in stored_ids]
+
+    # Last-resort fallback: no segment AND no opportunity IDs — generic pool query.
+    # This should only happen for manually created campaigns without a segment.
     if not customer_ids:
         limit_val = campaign.predicted_reach if (campaign.predicted_reach and campaign.predicted_reach > 0) else 15
         cust_res = await session.execute(select(Customer.id).limit(limit_val))

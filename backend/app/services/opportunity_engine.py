@@ -257,6 +257,13 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
     dormant_count, dormant_revenue, dormant_avg_ltv = (row[0] or 0), (row[1] or 0.0), (row[2] or 0.0)
 
     if dormant_count > 0:
+        # Fetch the exact customer IDs so campaigns target precisely these customers
+        dormant_ids_result = await session.execute(
+            select(CustomerPersona.customer_id)
+            .where(CustomerPersona.risk_level == "dormant")
+        )
+        dormant_customer_ids = [str(row[0]) for row in dormant_ids_result.all()]
+
         # Urgency: assume 23% MoM increase (we'd track this with time-series in prod)
         prev_estimate = dormant_revenue * 0.72   # simulated 4.9L → 6.8L style delta
         why_now = (
@@ -286,6 +293,7 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
                 "previous_revenue_estimate": round(prev_estimate, 2),
                 "mom_increase_pct": 23,
                 "avg_ltv": round(float(dormant_avg_ltv), 2),
+                "customer_ids": dormant_customer_ids,
             },
             ai_reasoning=f"Identified {dormant_count} customers with risk_level='dormant'. LTV of ₹{dormant_revenue:,.0f} is highest immediate recovery opportunity."
         ))
@@ -301,6 +309,12 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
     email_count = email_result.scalar() or 0
 
     if whatsapp_count > email_count and whatsapp_count > 0:
+        # Fetch the exact customer IDs for WhatsApp-affinity customers
+        whatsapp_ids_result = await session.execute(
+            select(CustomerPersona.customer_id).where(CustomerPersona.channel_affinity == "whatsapp")
+        )
+        whatsapp_customer_ids = [str(row[0]) for row in whatsapp_ids_result.all()]
+
         pct = int(((whatsapp_count - email_count) / max(email_count, 1)) * 100)
         # Estimate uplift: switching to preferred channel boosts conversion ~3x
         # Use avg campaign reach × conversion uplift × avg order value proxy
@@ -332,6 +346,7 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
                 "whatsapp_count": whatsapp_count,
                 "email_count": email_count,
                 "channel_revenue_estimate": round(channel_revenue_estimate, 2),
+                "customer_ids": whatsapp_customer_ids,
             },
             ai_reasoning=f"Channel affinity analysis shows WhatsApp dominance ({whatsapp_count} vs {email_count} email). WhatsApp typically delivers 78% read rates vs 22% for email."
         ))
@@ -350,6 +365,14 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
     atrisk_count, atrisk_revenue, atrisk_avg_ltv = (row[0] or 0), (row[1] or 0.0), (row[2] or 0.0)
 
     if atrisk_count > 0:
+        # Fetch the exact customer IDs for at-risk customers
+        atrisk_ids_result = await session.execute(
+            select(CustomerPersona.customer_id)
+            .where(CustomerPersona.risk_level == "at_risk")
+            .where(CustomerPersona.engagement_score >= 50)
+        )
+        atrisk_customer_ids = [str(row[0]) for row in atrisk_ids_result.all()]
+
         why_now = (
             f"{atrisk_count} formerly engaged customers are now showing churn signals. "
             f"Early intervention at this stage has the highest success probability."
@@ -375,6 +398,7 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
             metadata_json={
                 "why_now": why_now,
                 "avg_ltv": round(float(atrisk_avg_ltv), 2),
+                "customer_ids": atrisk_customer_ids,
             },
             ai_reasoning=f"Customers with engagement_score ≥ 50 AND risk_level='at_risk' — formerly engaged, now slipping away."
         ))
@@ -393,6 +417,13 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
     incremental = float(discount_revenue) * 0.15
 
     if discount_count > 0:
+        # Fetch the exact customer IDs for discount-affinity customers
+        discount_ids_result = await session.execute(
+            select(CustomerPersona.customer_id)
+            .where(CustomerPersona.discount_affinity == "high")
+        )
+        discount_customer_ids = [str(row[0]) for row in discount_ids_result.all()]
+
         why_now = (
             f"{discount_count} customers have high discount affinity and haven't received a promotion recently. "
             f"Estimated incremental revenue: ₹{incremental/100000:.1f}L."
@@ -419,6 +450,7 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
                 "why_now": why_now,
                 "avg_ltv": round(float(discount_avg_ltv), 2),
                 "incremental_revenue_estimate": round(incremental, 2),
+                "customer_ids": discount_customer_ids,
             },
             ai_reasoning=f"discount_affinity='high' with no recent activation. Cross-sell targeting this group yields above-average conversion."
         ))
@@ -437,6 +469,14 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
     loyalty_revenue = float(loyal_avg_ltv) * loyal_count * 0.1
 
     if loyal_count > 0:
+        # Fetch the exact customer IDs for loyal/VIP customers
+        loyal_ids_result = await session.execute(
+            select(CustomerPersona.customer_id)
+            .where(CustomerPersona.risk_level == "loyal")
+            .where(CustomerPersona.engagement_score >= 70)
+        )
+        loyal_customer_ids = [str(row[0]) for row in loyal_ids_result.all()]
+
         why_now = (
             f"{loyal_count} loyal, highly engaged customers have not been formally rewarded yet. "
             f"Proactive rewards reduce churn risk by 40% and increase AOV by 12–18%."
@@ -462,6 +502,7 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
             metadata_json={
                 "why_now": why_now,
                 "avg_ltv": round(float(loyal_avg_ltv), 2),
+                "customer_ids": loyal_customer_ids,
             },
             ai_reasoning=f"Loyal customers with engagement_score ≥ 70. Proactive rewards reduce churn risk by 40%."
         ))
@@ -483,6 +524,16 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
     emerging_projected_ltv = float(emerging_avg_ltv) * emerging_count * 1.8  # projected future value
 
     if emerging_count > 0:
+        # Fetch the exact customer IDs for emerging VIP customers
+        emerging_ids_result = await session.execute(
+            select(CustomerPersona.customer_id)
+            .join(Customer, CustomerPersona.customer_id == Customer.id)
+            .where(CustomerPersona.risk_level == "new")
+            .where(CustomerPersona.engagement_score >= 60)
+            .where(Customer.order_count >= 3)
+        )
+        emerging_customer_ids = [str(row[0]) for row in emerging_ids_result.all()]
+
         why_now = (
             f"{emerging_count} customers are on an accelerating spend trajectory. "
             f"Projected future LTV: ₹{emerging_projected_ltv/100000:.1f}L. "
@@ -515,6 +566,7 @@ async def discover_opportunities(session: AsyncSession) -> list[Opportunity]:
                 "projected_ltv": round(emerging_projected_ltv, 2),
                 "current_avg_ltv": round(float(emerging_avg_ltv), 2),
                 "spend_growth_pct": 180,  # representative figure
+                "customer_ids": emerging_customer_ids,
             },
             ai_reasoning=f"New cohort with engagement ≥ 60 and ≥ 3 orders. High projected LTV. Capture before churn window opens."
         ))

@@ -208,6 +208,7 @@ def _algorithmic_investigation(opportunity: Opportunity) -> OpportunityInvestiga
         effort=ie["effort"],
         recommended_action=ie["action"],
         recommended_goal=recommended_goal,
+        opportunity_customer_ids=(opportunity.metadata_json or {}).get("customer_ids", []),
     )
 
 
@@ -323,6 +324,7 @@ Be specific, use ₹ amounts, be concise and executive-level. Do not suggest new
                 f"{opportunity.affected_customers} customers to recover "
                 f"₹{opportunity.potential_revenue/100000:.1f}L in revenue."
             ),
+            opportunity_customer_ids=meta.get("customer_ids", []),
         )
 
     except Exception as e:

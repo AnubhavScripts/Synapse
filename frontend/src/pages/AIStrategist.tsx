@@ -85,7 +85,7 @@ export default function AIStrategist() {
     }
   }, [searchParams, oppId]);
 
-  async function handleLaunch(strat: StrategyResponse) {
+  async function handleLaunch(strat: StrategyResponse, opportunityCustomerIds?: string[]) {
     setLaunchingCampaign(true);
     try {
       const segments = await getSegments();
@@ -115,6 +115,16 @@ export default function AIStrategist() {
       }
       const segmentId = matchedSegment ? matchedSegment.id : null;
 
+      // Build ai_strategy: always include opportunity_customer_ids when available.
+      // This ensures campaign_service sends messages to exactly the affected customers.
+      const aiStrategy: Record<string, unknown> = {
+        type: 'automated',
+        confidence: strat.strategy.confidence_score,
+      };
+      if (opportunityCustomerIds && opportunityCustomerIds.length > 0) {
+        aiStrategy.opportunity_customer_ids = opportunityCustomerIds;
+      }
+
       const campaign = await createCampaign({
         name: strat.goal_summary,
         goal: strat.strategy.approach,
@@ -123,11 +133,11 @@ export default function AIStrategist() {
         message_headline: strat.message.headline,
         message_body: strat.message.body,
         message_cta: strat.message.cta,
-        ai_strategy: {
-          type: 'automated',
-          confidence: strat.strategy.confidence_score
-        },
-        predicted_reach: strat.performance.estimated_reach,
+        ai_strategy: aiStrategy,
+        // Use exact affected customer count as predicted_reach when IDs are known
+        predicted_reach: (opportunityCustomerIds && opportunityCustomerIds.length > 0)
+          ? opportunityCustomerIds.length
+          : strat.performance.estimated_reach,
         predicted_opens: strat.performance.estimated_opens,
         predicted_clicks: strat.performance.estimated_clicks,
         predicted_conversions: strat.performance.estimated_conversions,
@@ -148,7 +158,9 @@ export default function AIStrategist() {
     setStrategyError('');
     try {
       const strat = await analyzeGoal(recommended_goal);
-      await handleLaunch(strat);
+      // Pass the exact customer IDs from the investigation so messages_sent == affected_customers
+      const customerIds = investigation?.opportunity_customer_ids ?? [];
+      await handleLaunch(strat, customerIds);
     } catch (e) {
       console.error('Failed to launch campaign from investigation:', e);
       setStrategyError('Failed to generate or launch campaign from recommendation.');
@@ -320,7 +332,7 @@ export default function AIStrategist() {
             <div className="skeleton" style={{ height: 100, borderRadius: 12 }} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-            {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 220, borderRadius: 12 }} />)}
+            {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 220, borderRadius: 12 }} />)}
           </div>
         </div>
       )}
@@ -454,13 +466,7 @@ export default function AIStrategist() {
                             <button
                               className="btn btn-secondary"
                               style={{ flex: 1 }}
-                              onClick={() => {
-                                setGoal(investigation.recommended_goal);
-                                setInvestigation(null);
-                                setTimeout(() => {
-                                  document.getElementById('goal-input')?.focus();
-                                }, 100);
-                              }}
+                              onClick={() => setGoal(investigation.recommended_goal)}
                             >
                               ✏️ Customize Strategy
                             </button>

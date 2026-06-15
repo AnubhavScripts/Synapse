@@ -104,3 +104,4 @@ class OpportunityInvestigationResponse(BaseModel):
     recommended_action: str      # "Launch immediately" | "Review manually" | "Schedule for off-peak"
 
     recommended_goal: str        # Pre-fill text for the existing /analyze endpoint
+    opportunity_customer_ids: list[str] = []  # Exact customer UUIDs to target — always = affected_customers count
