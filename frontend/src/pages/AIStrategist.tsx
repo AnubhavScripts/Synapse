@@ -88,6 +88,7 @@ export default function AIStrategist() {
   async function handleLaunch(strat: StrategyResponse, opportunityCustomerIds?: string[]) {
     setLaunchingCampaign(true);
     try {
+      const targetIds = opportunityCustomerIds ?? investigation?.opportunity_customer_ids ?? [];
       const segments = await getSegments();
       let matchedSegment = segments.find(s => {
         const sName = s.name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -121,8 +122,8 @@ export default function AIStrategist() {
         type: 'automated',
         confidence: strat.strategy.confidence_score,
       };
-      if (opportunityCustomerIds && opportunityCustomerIds.length > 0) {
-        aiStrategy.opportunity_customer_ids = opportunityCustomerIds;
+      if (targetIds && targetIds.length > 0) {
+        aiStrategy.opportunity_customer_ids = targetIds;
       }
 
       const campaign = await createCampaign({
@@ -135,8 +136,8 @@ export default function AIStrategist() {
         message_cta: strat.message.cta,
         ai_strategy: aiStrategy,
         // Use exact affected customer count as predicted_reach when IDs are known
-        predicted_reach: (opportunityCustomerIds && opportunityCustomerIds.length > 0)
-          ? opportunityCustomerIds.length
+        predicted_reach: (targetIds && targetIds.length > 0)
+          ? targetIds.length
           : strat.performance.estimated_reach,
         predicted_opens: strat.performance.estimated_opens,
         predicted_clicks: strat.performance.estimated_clicks,
