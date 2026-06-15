@@ -79,7 +79,12 @@ async def launch_campaign(campaign_id: UUID, session: AsyncSession) -> Campaign:
         campaign_id = cloned_campaign.id
 
     # ── 1. Identify Target Audience ───────────────────────────────────────────
-    if campaign.segment_id:
+    # Prioritize exact customer IDs from opportunity investigation first
+    stored_ids = (campaign.ai_strategy or {}).get("opportunity_customer_ids", [])
+    if stored_ids:
+        from uuid import UUID as _UUID
+        customer_ids = [_UUID(cid) for cid in stored_ids]
+    elif campaign.segment_id:
         members_result = await session.execute(
             select(SegmentMembership.customer_id).where(
                 SegmentMembership.segment_id == campaign.segment_id
@@ -88,15 +93,6 @@ async def launch_campaign(campaign_id: UUID, session: AsyncSession) -> Campaign:
         customer_ids = [row[0] for row in members_result.all()]
     else:
         customer_ids = []
-
-    # Fix: if the campaign was launched from an opportunity investigation, the
-    # exact affected customer UUIDs are stored in ai_strategy['opportunity_customer_ids'].
-    # Use those directly so messages_sent == affected_customers, always.
-    if not customer_ids:
-        stored_ids = (campaign.ai_strategy or {}).get("opportunity_customer_ids", [])
-        if stored_ids:
-            from uuid import UUID as _UUID
-            customer_ids = [_UUID(cid) for cid in stored_ids]
 
     # Last-resort fallback: no segment AND no opportunity IDs — generic pool query.
     # This should only happen for manually created campaigns without a segment.
