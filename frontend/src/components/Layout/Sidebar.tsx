@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { Brain, Megaphone, Users, PieChart, BarChart3, Activity, Sparkles, Cpu } from 'lucide-react';
 
 const navItems = [
@@ -16,9 +16,11 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <div className="sidebar-brand-text" style={{ fontSize: '20px', fontWeight: 800, color: '#4648d4', letterSpacing: '-0.5px' }}>
-          Synapse
-        </div>
+        <Link to="/" style={{ textDecoration: 'none' }}>
+          <div className="sidebar-brand-text" style={{ fontSize: '20px', fontWeight: 800, color: '#4648d4', letterSpacing: '-0.5px', cursor: 'pointer' }}>
+            Synapse
+          </div>
+        </Link>
       </div>
 
       <nav className="sidebar-nav">
@@ -39,7 +41,7 @@ export default function Sidebar() {
 
       <div style={{ padding: 'var(--space-4)', borderTop: '1px solid var(--color-gray-100)' }}>
         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)', textAlign: 'center' }}>
-          Synapse v1.0 — AI CRM
+          Synapse v2.0 — AI CRM
         </div>
       </div>
     </aside>
