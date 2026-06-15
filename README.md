@@ -1,4 +1,4 @@
-# Synapse — ReachIQ
+# Synapse
 
 ### Autonomous AI-Native CRM for Intelligent Customer Growth
 
@@ -36,18 +36,70 @@ The system answers automatically:
 
 ---
 
-# Live Deployment
+# Deployment & Local Development
 
-Frontend
+### Live Deployment
+* **Frontend:** Deployed on Vercel.
+* **CRM API Service (Backend):** Deployed on Render.
+* **Messaging Gateway Service (Backend):** Deployed independently on Render.
 
-* Deployed on Vercel
+---
 
-Backend Infrastructure
+### Local Development Setup
 
-* CRM API Service deployed on Render
-* Messaging Gateway Service deployed independently on Render
+Follow these steps to run the Synapse CRM platform locally.
 
-Architecture runs as distributed microservices.
+#### Prerequisites
+- **Python 3.11+** installed.
+- **Node.js (v18+)** and **npm** installed.
+- A PostgreSQL database (e.g. Neon or local PG instance).
+
+#### 1. Backend Setup & Running
+Navigate to the `backend/` directory:
+```bash
+cd backend
+```
+
+Create a `.env` file inside `backend/` with your environment variables:
+```env
+DATABASE_URL=your_postgres_database_url
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+Install the required Python dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+Start the **CRM API Service** (runs on port 8000 by default):
+```bash
+python run.py
+```
+
+Start the **Messaging Gateway Service** (runs on port 8001 by default):
+```bash
+python run_gateway.py
+```
+
+*Note: The database is automatically migrated and seeded upon starting the CRM API Service.*
+
+#### 2. Frontend Setup & Running
+Navigate to the `frontend/` directory:
+```bash
+cd ../frontend
+```
+
+Install the frontend dependencies:
+```bash
+npm install
+```
+
+Start the Vite development server (runs on `http://localhost:5173` by default):
+```bash
+npm run dev
+```
+
+The frontend React application will communicate with the backend services running locally.
 
 ---
 
