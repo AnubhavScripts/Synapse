@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
 
 # ── FastAPI App ────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="ReachIQ Messaging Gateway",
+    title="Synapse Messaging Gateway",
     description="Service B — Handles campaign dispatch, simulation, and CRM callbacks",
     version="1.0.0",
     lifespan=lifespan,

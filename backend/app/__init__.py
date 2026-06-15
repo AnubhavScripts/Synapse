@@ -1,1 +1,1 @@
-# ReachIQ Backend
+# Synapse Backend

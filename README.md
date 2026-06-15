@@ -1,66 +1,544 @@
-# ReachIQ — AI Strategist CRM (Synapse)
+# Synapse — ReachIQ
 
-ReachIQ is a modern, premium AI-CRM platform built to identify customer growth/risk opportunities, generate targeted campaign strategies using strategic reasoning models (Gemini 2.5), and simulate high-throughput message dispatch pipelines with guaranteed durability and delivery sequence safety.
+### Autonomous AI-Native CRM for Intelligent Customer Growth
 
----
+Synapse is an AI-native customer intelligence and campaign automation platform designed for modern consumer brands.
 
-## 🏗️ What We Have Built
+Traditional CRM systems are reactive. Marketers manually analyze customer data, manually create customer segments, manually decide campaign strategy, and usually act only after customers begin churning.
 
-1. **Deterministic Opportunity Engine** (`opportunity_engine.py`)
-   * An algorithmic, fully deterministic engine that scans raw customer data and persona snapshots to discover growth/risk opportunities (e.g. dormant customers, at-risk churn, emerging VIPs, discount-sensitive cohorts).
-   * Implements priority scoring based on potential revenue, audience size, urgency, and average lifetime value (LTV).
+Synapse rethinks this workflow.
 
-2. **AI Strategic Reasoning Layer** (`ai_strategist.py` & `opportunity_investigation.py`)
-   * Leverages Gemini 2.5 Flash for strategy drafting, root-cause analysis, and candidate action comparison.
-   * Prompts generate structured JSON payloads containing concise campaign titles, strategic approaches, performance forecasts, and dynamic message drafts (with `{{name}}` and `{{category}}` personalization tokens).
+Instead of waiting for marketers to identify opportunities, the platform continuously analyzes customer behavior, proactively discovers revenue opportunities, recommends strategic interventions, executes personalized campaigns across communication channels, and continuously learns from customer interactions.
 
-3. **Distributed Messaging Gateway** (`gateway_app.py`)
-   * A standalone microservice (running on port `8001`) simulating messaging carrier networks.
-   * Processes campaigns in batches of 10 with concurrent execution bounded by an asynchronous semaphore to prevent system saturation.
-   * Simulates customer journeys (Sent $\rightarrow$ Delivered $\rightarrow$ Read $\rightarrow$ Clicked $\rightarrow$ Converted/Expired) and fires sequential webhook callbacks.
+The goal is simple:
 
-4. **Pessimistic & Idempotent Callback Processor** (`callback_processor.py`)
-   * Handles webhook events from the Gateway.
-   * Implements a **Sequence Guard** (ignores callbacks with sequence numbers less than or equal to the message's current state) to handle out-of-order network packets.
-   * Uses **Pessimistic Locking** (`SELECT FOR UPDATE`) on campaign message and campaign rows to eliminate concurrency race conditions.
-   * Performs O(1) SQL atomic counter increments for live reporting (e.g., `actual_sent = actual_sent + 1`).
-
-5. **Modern React Frontend**
-   * **Opportunity Center**: Lists growth opportunities prioritized by value and score.
-   * **AI Strategist**: Displays deep-dive investigations, candidate options comparison, expected revenues, and customization panels.
-   * **Campaigns Panel**: Displays live execution timelines, funnel charts, decision histories, and message-level delivery records.
-   * **Segments**: Manages demographic attributes and revenue contributions.
+**Transform CRM from a reactive dashboard into autonomous customer growth infrastructure.**
 
 ---
 
-## ⚡ Seed Data Summary
+# Product Vision
 
-Running the database seeder (`app/seed.py`) populates the database with scaled, realistic mock data for testing:
+Most CRM systems follow this workflow:
 
-| Component | Fed / Input Templates | Dynamically Figured Out by System |
-| :--- | :--- | :--- |
-| **250 Customers** | Base Names & Email Domains | Spend patterns (VIP, moderate, dormant, discount), AOV, LTV, and signup dates. |
-| **250 Personas** | *None (computed)* | Composite engagement scores, channel affinities, discount sensitivity, and category affinities. |
-| **7 Segments** | Prebuilt membership rules | Dynamic member counts, growth trends, and revenue contributions. |
-| **10 Campaigns** | Baseline campaign concepts | Reach, outcomes simulation (opens, conversions, revenue) and execution timelines. |
-| **64 Decision Logs** | *None (computed)* | Historical strategic routing reasoning logs and confidence rates per customer. |
-| **72 Activities** | *None (computed)* | Transactional timeline logs tracking gateway dispatches and callback steps. |
-| **5 Opportunities** | *None (computed)* | High-value growth initiatives and targeted customer counts discovered from scratch. |
+Customer Data → Manual Segmentation → Manual Campaign Creation → Manual Analysis
 
----
+Synapse introduces a proactive intelligence layer:
 
-## ⚖️ Architectural Tradeoffs
+Customer Data → Behavioral Intelligence → Opportunity Discovery → Strategy Generation → Campaign Execution → Continuous Learning Loop
 
-* **Algorithmic vs. Generative Boundary**: We separated database scanning from LLM generation. Opportunity discovery and priority scoring are 100% deterministic (Python/SQL). Gemini is restricted to narrative explanation, root-cause enrichment, and creative message drafting. This guarantees data stability and eliminates LLM hallucination in financial modeling.
-* **Durability vs. Write Overhead**: Every incoming callback is committed to the `callback_events` table *before* it is processed. This ensures that no delivery data is lost if the background queue crashes, though it increases database write volume.
-* **Keyword-based Segment Fallback**: Instead of crashing or failing if Gemini generates a segment name that doesn't match the database exactly, a robust regex-based keyword fallback mapping is implemented in the frontend. This prevents empty audience dispatches.
-* **In-Memory Concurrency Bounding**: We used `asyncio.Semaphore` inside the gateway app to cap execution speed rather than using external brokers (like Celery or Redis) to keep the developer environment lightweight.
+Rather than asking:
+
+*"Which customers should I target?"*
+
+The system answers automatically:
+
+*"I discovered 14 customers entering dormancy. ₹2.8L revenue is at risk. Here are three intervention strategies ranked by expected impact."*
 
 ---
 
-## ⚠️ Scalability Bottlenecks (What Will Go Wrong)
+# Live Deployment
 
-* **Background Task Durability**: We use FastAPI's in-memory `BackgroundTasks` to process callback events asynchronously. If the CRM server restarts or crashes while callbacks are queued in memory, those callbacks will be lost (requiring a database worker script to find and retry `pending` callback events).
-* **Database lock contention**: We execute `with_for_update()` locking on `campaigns` and `campaign_messages` rows during callback processing. Under high throughput (10,000+ callbacks per second), database lock wait times will scale exponentially, leading to pool exhaustion.
-* **Synchronous Campaign Message Insertion**: In `launch_campaign`, the database rows for target messages are created in a linear loop before dispatching. For campaigns with 100,000+ targeted customers, this single-threaded loop will time out the HTTP request. We would need to implement bulk inserts (`bulk_save_objects`) and process them in an async task queue.
-* **Stateful Gateway Semaphore**: Bounding Gateway concurrency with `asyncio.Semaphore` works only when running a single service instance. If the Messaging Gateway is scaled horizontally behind a load balancer, instances won't share state, which can saturate the CRM API downstream.
+Frontend
+
+* Deployed on Vercel
+
+Backend Infrastructure
+
+* CRM API Service deployed on Render
+* Messaging Gateway Service deployed independently on Render
+
+Architecture runs as distributed microservices.
+
+---
+
+# Core Product Features
+
+### 1. Autonomous Opportunity Discovery
+
+The platform continuously scans customer behavior and automatically discovers business opportunities.
+
+Examples:
+
+* Dormant customer recovery opportunities
+* High value customers showing churn signals
+* Cross-sell opportunities
+* Emerging VIP customers
+* Discount-sensitive customer cohorts
+* Channel saturation detection
+
+No manual configuration required.
+
+---
+
+### 2. Behavioral Intelligence Engine
+
+Every customer is transformed into a dynamic behavioral persona.
+
+The engine computes:
+
+* Engagement score
+* Churn risk prediction
+* Channel affinity
+* Price sensitivity
+* Category affinity
+* Purchase frequency
+* Revenue contribution
+
+This intelligence layer continuously updates after campaign execution.
+
+---
+
+### 3. AI Strategist
+
+After discovering an opportunity, the strategist investigates:
+
+* Why this opportunity exists
+* Why immediate action is required
+* Root cause analysis
+* Alternative recovery strategies
+* Revenue projections
+* Conversion forecasts
+
+The strategist compares multiple interventions.
+
+Example:
+
+Option A → 10% Discount
+Option B → Free Shipping
+Option C → Loyalty Rewards
+
+Each strategy is ranked using projected business impact.
+
+---
+
+### 4. Personalized Campaign Generation
+
+The system generates personalized campaign communication.
+
+Output includes:
+
+* Campaign title
+* Strategic objective
+* Channel recommendation
+* Personalized message body
+* Dynamic personalization tokens
+
+Example:
+
+Hello {{name}}, we noticed you love {{category}} products. Here’s something special for you.
+
+---
+
+### 5. Distributed Campaign Execution Engine
+
+Campaign execution runs through a distributed messaging architecture.
+
+The system simulates real-world messaging infrastructure.
+
+Supported lifecycle:
+
+Queued → Sent → Delivered → Read → Clicked → Converted / Expired
+
+This architecture models how actual messaging providers work in production systems.
+
+---
+
+### 6. Real-Time Campaign Analytics
+
+Campaign execution updates live metrics in real time.
+
+Tracked metrics:
+
+* Messages sent
+* Delivery rate
+* Read rate
+* Click-through rate
+* Conversion rate
+* Revenue generated
+* Funnel analytics
+* Message level delivery states
+
+---
+
+# System Architecture
+
+The platform is intentionally split into multiple intelligence layers.
+
+```text
+Customer Data (PostgreSQL)
+
+        ↓
+
+Persona Engine
+(Customer Behavioral Intelligence)
+
+        ↓
+
+Opportunity Engine
+(Revenue Opportunity Discovery)
+
+        ↓
+
+AI Strategist
+(Strategy Investigation + Reasoning)
+
+        ↓
+
+Campaign Creation Engine
+
+        ↓
+
+CRM API Service (Port 8000)
+
+        ↓
+
+Messaging Gateway Service (Port 8001)
+
+        ↓
+
+Webhook Callback Processor
+
+        ↓
+
+Campaign Analytics Engine
+
+        ↓
+
+Continuous Learning Feedback Loop
+```
+
+---
+
+# AI-Native Architecture
+
+The system intentionally separates deterministic intelligence from generative AI.
+
+This boundary was designed deliberately.
+
+Business-critical decisions should remain reproducible, auditable, and stable.
+
+LLMs should only be used where language reasoning provides value.
+
+---
+
+## Deterministic Intelligence Layer
+
+Implemented entirely using Python + SQL.
+
+Responsible for:
+
+* Customer persona generation
+* Churn prediction
+* Risk classification
+* Channel affinity scoring
+* Opportunity discovery
+* Priority scoring
+* Revenue calculations
+* Strategy evaluation
+* Campaign analytics
+* Delivery simulation
+
+This layer guarantees deterministic behavior.
+
+No LLM is involved.
+
+---
+
+## Generative Intelligence Layer (Gemini 2.5 Flash)
+
+Gemini is intentionally restricted to reasoning and language generation.
+
+Responsible for:
+
+* Root cause explanation
+* Why-now urgency analysis
+* Strategy comparison reasoning
+* Campaign communication generation
+* Personalized message copy drafting
+
+This prevents hallucination from affecting business-critical decisions.
+
+---
+
+# Distributed Messaging Infrastructure
+
+The assignment explicitly required a callback-driven communication architecture.
+
+The platform uses two completely independent services.
+
+---
+
+## Service A — CRM API (Port 8000)
+
+Responsible for:
+
+* Campaign creation
+* Campaign message generation
+* Receiving webhook callbacks
+* Processing delivery events
+* Updating campaign analytics
+* Maintaining customer state
+
+---
+
+## Service B — Messaging Gateway (Port 8001)
+
+Responsible for:
+
+* Receiving dispatch requests
+* Processing messages in batches
+* Simulating customer delivery lifecycle
+* Sending webhook callbacks back to CRM
+
+Lifecycle:
+
+Sent → Delivered → Read → Clicked → Converted / Failed
+
+---
+
+# Engineering Challenges Solved
+
+---
+
+## 1. Concurrent Callback Race Conditions
+
+Problem:
+
+Multiple asynchronous callbacks could update the same campaign message simultaneously.
+
+Example:
+
+Delivered event and Expired event arriving at nearly the same time.
+
+This created lost update anomalies.
+
+Solution:
+
+Implemented PostgreSQL pessimistic row locking.
+
+```python
+select(CampaignMessage)
+.where(CampaignMessage.id == event.message_id)
+.with_for_update()
+```
+
+This guarantees serialized updates.
+
+---
+
+## 2. Out-of-Order Network Events
+
+Problem:
+
+Messaging networks can deliver events out of order.
+
+Example:
+
+Read event arrives before Delivered event.
+
+Solution:
+
+Implemented sequence guard.
+
+Example:
+
+Sent = 1
+Delivered = 2
+Read = 3
+Clicked = 4
+Converted = 5
+
+Older sequence events are ignored automatically.
+
+---
+
+## 3. Duplicate Webhook Processing
+
+Problem:
+
+Network retries may resend identical callbacks.
+
+Solution:
+
+Implemented callback idempotency layer.
+
+Each callback is stored before processing.
+
+Duplicate callback IDs are rejected automatically.
+
+---
+
+# Simulated Dataset
+
+The platform uses realistic seeded production-like data.
+
+Generated dataset includes:
+
+* 250 customers
+* 250 dynamically computed customer personas
+* 7 behavioral customer segments
+* Historical campaign records
+* Historical decision logs
+* Activity execution timelines
+* Automatically discovered opportunities
+
+Important:
+
+Most intelligence is dynamically computed.
+
+Very little data is hardcoded.
+
+---
+
+# Technical Stack
+
+### Frontend
+
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+* Framer Motion
+* Recharts
+
+### Backend
+
+* FastAPI
+* Async SQLAlchemy
+* PostgreSQL (NeonDB)
+
+### AI Layer
+
+* Gemini 2.5 Flash API
+
+### Infrastructure
+
+* CRM API Microservice
+* Messaging Gateway Microservice
+* Async HTTP Webhook Architecture
+
+### Deployment
+
+* Vercel (Frontend)
+* Render (CRM API)
+* Render (Messaging Gateway)
+
+---
+
+# Engineering Tradeoffs
+
+Several design decisions were made intentionally.
+
+---
+
+### Deterministic Intelligence over Full ML Models
+
+Instead of training machine learning models for churn prediction and opportunity discovery, deterministic intelligence engines were used.
+
+Reason:
+
+* Lower infrastructure complexity
+* No model training pipeline required
+* Easier explainability
+* Lower storage overhead
+* Deterministic reproducible outputs
+
+For this problem scope, deterministic intelligence achieves nearly equivalent business value with significantly lower system complexity.
+
+---
+
+### No Redis or Celery
+
+Instead of introducing distributed task queues.
+
+Used:
+
+* FastAPI background tasks
+* Async HTTP callbacks
+* Concurrency bounded semaphores
+
+Reason:
+
+* Lightweight architecture
+* Faster development iteration
+* Easier deployment
+
+---
+
+# Current Scalability Bottlenecks
+
+At production scale several bottlenecks will emerge.
+
+---
+
+### Background Task Durability
+
+FastAPI BackgroundTasks run in memory.
+
+If the CRM service crashes, queued callback jobs may be lost.
+
+Future solution:
+
+Redis + Celery worker architecture.
+
+---
+
+### Database Lock Contention
+
+Heavy callback throughput will increase row lock contention.
+
+Future solution:
+
+Kafka queue + worker pool architecture.
+
+---
+
+### Large Campaign Launch Bottleneck
+
+Campaign message creation currently happens synchronously.
+
+100,000+ customer campaigns will cause HTTP request timeouts.
+
+Future solution:
+
+Bulk inserts + background queue workers.
+
+---
+
+### Stateful Gateway Concurrency Limits
+
+Current semaphore works only for single gateway instance.
+
+Future solution:
+
+Distributed queue-based concurrency control.
+
+---
+
+# Future Improvements
+
+* ML-based churn prediction models
+* Reinforcement learning campaign optimization
+* Distributed queue workers using Redis/Celery
+* Kafka event streaming architecture
+* Multi-tenant brand support
+* Real messaging provider integrations
+* A/B testing engine
+* Autonomous self-learning recommendation loop
+
+---
+
+# Why This Project Exists
+
+This project explores a simple idea.
+
+CRM systems should not wait for marketers to make decisions.
+
+They should understand customer behavior continuously, identify growth opportunities autonomously, and execute customer engagement intelligently.
+
+The future of CRM is not dashboards.
+
+The future of CRM is autonomous decision systems.
+
+---
+

@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="ReachIQ CRM",
+    title="Synapse CRM",
     description="AI-Native Customer Engagement CRM — Service A",
     version="3.0.0",
     lifespan=lifespan,
@@ -99,7 +99,7 @@ app.include_router(decisions_router)
 
 @app.get("/")
 async def root():
-    return {"name": "ReachIQ CRM", "version": "3.0.0", "status": "running"}
+    return {"name": "Synapse CRM", "version": "3.0.0", "status": "running"}
 
 
 @app.get("/health")

@@ -22,6 +22,7 @@ from app.schemas.strategist import (
     PerformancePrediction,
 )
 from app.core.config import get_settings
+from app.services.opportunity_engine import get_candidate_actions
 
 settings = get_settings()
 
@@ -171,7 +172,7 @@ async def analyze_goal(goal: str, session: AsyncSession) -> StrategyResponse:
 
         client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-        prompt = f"""You are an AI Marketing Strategist for a retail brand's CRM platform called ReachIQ.
+        prompt = f"""You are an AI Marketing Strategist for a retail brand's CRM platform called Synapse.
 
 You have deep customer intelligence from our Persona Engine:
 

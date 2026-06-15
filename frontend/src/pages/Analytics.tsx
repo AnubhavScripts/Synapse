@@ -21,7 +21,7 @@ export default function AnalyticsPage() {
   const { data: channels, isLoading: loadingChannels } = useQuery<ChannelPerformance[]>({ queryKey: ['channel-perf'], queryFn: getChannelPerformance });
   const { data: audiences } = useQuery({ queryKey: ['audience-perf'], queryFn: getAudiencePerformance });
 
-  useEffect(() => { document.title = 'ReachIQ — Analytics'; }, []);
+  useEffect(() => { document.title = 'Synapse — Analytics'; }, []);
 
   const execMetrics = overview ? [
     { label: 'Revenue Influenced', value: formatCurrency(overview.revenue_influenced), icon: IndianRupee, color: 'success' },

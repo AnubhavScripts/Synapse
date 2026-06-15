@@ -37,7 +37,7 @@ export default function CustomersPage() {
     queryFn: () => getCustomers({ search, risk_level: riskFilter, page_size: 50 }),
   });
 
-  useEffect(() => { document.title = 'ReachIQ — Customers'; }, []);
+  useEffect(() => { document.title = 'Synapse — Customers'; }, []);
 
   async function openProfile(c: Customer) {
     setSelectedCustomer(c);

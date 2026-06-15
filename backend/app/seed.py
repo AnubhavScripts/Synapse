@@ -1,5 +1,5 @@
 """
-Database Seeder — Populates ReachIQ with realistic data.
+Database Seeder — Populates Synapse with realistic data.
 ~100 customers, personas, 7 segments, 10 campaigns, decision logs, activities, opportunities.
 """
 
@@ -56,7 +56,7 @@ async def seed():
         await conn.run_sync(Base.metadata.create_all)
 
     async with async_session() as session:
-        print("🌱 Seeding ReachIQ database...")
+        print("🌱 Seeding Synapse database...")
 
         # ── CUSTOMERS ──────────────────────────────────────
         customers = []
@@ -357,7 +357,7 @@ async def seed():
         print(f"  ✓ Discovered {len(opps)} opportunities")
 
         await session.commit()
-        print("\n✅ ReachIQ database seeded successfully!")
+        print("\n✅ Synapse database seeded successfully!")
         print(f"   Customers: {len(customers)}")
         print(f"   Personas:  {len(customers)}")
         print(f"   Segments:  {len(segments)}")

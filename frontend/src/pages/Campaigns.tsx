@@ -37,7 +37,7 @@ export default function CampaignsPage() {
     return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
   }
 
-  useEffect(() => { document.title = 'ReachIQ — Campaigns'; }, []);
+  useEffect(() => { document.title = 'Synapse — Campaigns'; }, []);
 
   useEffect(() => {
     if (!selectedCampaign) return;

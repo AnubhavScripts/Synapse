@@ -57,7 +57,7 @@ export default function OpportunityCenter() {
     queryKey: ['opportunities'], queryFn: getOpportunities,
   });
 
-  useEffect(() => { document.title = 'ReachIQ — Opportunity Center'; }, []);
+  useEffect(() => { document.title = 'Synapse — Opportunity Center'; }, []);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -74,9 +74,9 @@ export default function OpportunityCenter() {
     try {
       await investigateOpportunity(opp.id);
       // Navigate to AI Strategist with pre-loaded context
-      navigate(`/strategist?opp=${opp.id}&goal=${encodeURIComponent(opp.recommended_action)}`);
+      navigate(`/dashboard/strategist?opp=${opp.id}&goal=${encodeURIComponent(opp.recommended_action)}`);
     } catch {
-      navigate(`/strategist?goal=${encodeURIComponent(opp.recommended_action)}`);
+      navigate(`/dashboard/strategist?goal=${encodeURIComponent(opp.recommended_action)}`);
     } finally {
       setInvestigatingId(null);
     }

@@ -259,7 +259,7 @@ async def investigate_opportunity(
         )
         evidence_hints = "\n".join(f"- {e}" for e in EVIDENCE_TEMPLATES.get(opportunity.opportunity_type, [])[:4])
 
-        prompt = f"""You are an AI Revenue Strategist for ReachIQ CRM. Investigate this business opportunity and provide expert insights.
+        prompt = f"""You are an AI Revenue Strategist for Synapse CRM. Investigate this business opportunity and provide expert insights.
 
 OPPORTUNITY: {opportunity.title}
 TYPE: {opportunity.opportunity_type}

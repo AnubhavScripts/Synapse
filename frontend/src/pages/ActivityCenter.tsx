@@ -21,7 +21,7 @@ export default function ActivityCenter() {
     queryFn: () => getActivities({ event_type: eventType, channel, limit: 100 }),
   });
 
-  useEffect(() => { document.title = 'ReachIQ — Activity Center'; }, []);
+  useEffect(() => { document.title = 'Synapse — Activity Center'; }, []);
 
   return (
     <div className="page-container">

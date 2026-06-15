@@ -73,7 +73,7 @@ export default function SegmentsPage() {
     queryKey: ['segments'], queryFn: getSegments,
   });
 
-  useEffect(() => { document.title = 'ReachIQ — Segments'; }, []);
+  useEffect(() => { document.title = 'Synapse — Segments'; }, []);
 
   const [membersData, setMembersData] = useState<SegmentMemberResponse | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(false);

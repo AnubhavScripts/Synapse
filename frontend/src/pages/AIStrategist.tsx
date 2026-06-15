@@ -59,7 +59,7 @@ export default function AIStrategist() {
   const [loadingInvestigation, setLoadingInvestigation] = useState(false);
   const [launchingCampaign, setLaunchingCampaign] = useState(false);
 
-  useEffect(() => { document.title = 'ReachIQ — AI Strategist'; }, []);
+  useEffect(() => { document.title = 'Synapse — AI Strategist'; }, []);
 
   // Cycle placeholder suggestions
   useEffect(() => {
@@ -135,7 +135,7 @@ export default function AIStrategist() {
       });
 
       await launchCampaign(campaign.id);
-      navigate('/campaigns');
+      navigate('/dashboard/campaigns');
     } catch (e) {
       console.error('Failed to create or launch campaign:', e);
     } finally {
