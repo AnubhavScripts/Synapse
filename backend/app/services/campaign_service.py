@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 GATEWAY_DISPATCH_URL = settings.GATEWAY_DISPATCH_URL
-GATEWAY_TIMEOUT = 10.0   # seconds — generous to allow Gateway startup latency
+GATEWAY_TIMEOUT = 90.0   # seconds — generous to allow Render Gateway cold start latency
 
 
 async def launch_campaign(campaign_id: UUID, session: AsyncSession) -> Campaign:

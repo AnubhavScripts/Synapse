@@ -146,13 +146,15 @@ async def get_timeline(campaign_id: UUID, db: AsyncSession = Depends(get_db)):
 
     # ── CRM Event: Dispatch Request Sent ──
     if campaign.launched_at:
+        from app.core.config import get_settings
+        settings = get_settings()
         events.append(CampaignTimelineEvent(
             id=f"crm-dispatched-{campaign.id}",
             timestamp=campaign.launched_at,
             service="crm",
             event_type="dispatch_sent",
             title="Dispatch Request Sent",
-            description=f"Campaign payload sent to Messaging Gateway at http://localhost:8001/gateway/dispatch",
+            description=f"Campaign payload sent to Messaging Gateway at {settings.GATEWAY_DISPATCH_URL}",
             status="success" if campaign.status != "dispatch_failed" else "failed",
             metadata={"channel": campaign.channel}
         ))

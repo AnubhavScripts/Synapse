@@ -101,7 +101,7 @@ def compute_channel_affinity(customer: Customer) -> tuple[str, dict]:
     For seed data, we compute deterministically from customer attributes.
     """
     # Simulate channel scores based on customer patterns
-    name_hash = sum(ord(c) for c in customer.name) % 100
+    name_hash = sum(ord(c) for c in customer.name) % 100 #ord convers name into a number then we add all number for random generation 
 
     if name_hash < 40:
         scores = {"whatsapp": 0.82 + random.uniform(0, 0.15), "sms": 0.35 + random.uniform(0, 0.15), "email": 0.20 + random.uniform(0, 0.10), "rcs": 0.55 + random.uniform(0, 0.15)}
