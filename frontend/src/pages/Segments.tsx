@@ -115,7 +115,7 @@ export default function SegmentsPage() {
       {/* AI Segment Builder */}
       <div className="card" style={{ marginBottom: 'var(--space-8)', background: 'linear-gradient(135deg, var(--color-primary-50), var(--color-white))' }}>
         <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 600, marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <Sparkles size={18} color="var(--color-primary-500)" /> AI Segment Builder
+          <Sparkles size={18} color="var(--color-primary-500)" /> Natural Language Segment Builder
         </h3>
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)', marginBottom: 'var(--space-4)' }}>
           Describe your audience in natural language
@@ -304,7 +304,7 @@ export default function SegmentsPage() {
                   border: '1px solid var(--color-primary-200)', padding: 16, marginBottom: 20,
                 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary-600)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                    AI-Generated from query
+                    Generated from natural language query
                   </div>
                   <p style={{ fontSize: 13, color: 'var(--color-gray-700)', fontStyle: 'italic', margin: 0 }}>
                     "{selectedSegment.query_text}"
@@ -397,7 +397,7 @@ export default function SegmentsPage() {
       {/* AI-Generated Segments */}
       {aiGenerated.length > 0 && (
         <section className="section">
-          <h2 className="section-title"><Sparkles size={20} /> AI-Generated Segments</h2>
+          <h2 className="section-title"><Sparkles size={20} /> Custom Query Segments</h2>
           <div className="grid-7">
             {aiGenerated.map((seg) => (
               <div

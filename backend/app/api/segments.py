@@ -207,7 +207,7 @@ async def build_segment(request: SegmentBuildRequest, db: AsyncSession = Depends
 
     # Create segment
     segment = Segment(
-        name=f"AI: {request.query[:60]}",
+        name=f"Query: {request.query[:60]}",
         description=f"Auto-generated segment from query: {request.query}",
         segment_type="ai_generated",
         query_text=request.query,
